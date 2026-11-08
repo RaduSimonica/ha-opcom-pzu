@@ -1,0 +1,20 @@
+refresh:
+backfill_history:
+  fields:
+    months:
+      required: false
+      selector:
+        number:
+          min: 1
+          max: 132
+          mode: box
+get_prices:
+  fields:
+    start_date:
+      required: true
+      selector:
+        date:
+    end_date:
+      required: false
+      selector:
+        date:

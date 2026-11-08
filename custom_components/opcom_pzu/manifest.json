@@ -1,0 +1,15 @@
+{
+  "domain": "opcom_pzu",
+  "name": "OPCOM PZU",
+  "codeowners": ["@RaduSimonica"],
+  "config_flow": true,
+  "dependencies": ["recorder"],
+  "after_dependencies": ["logbook"],
+  "documentation": "https://github.com/RaduSimonica/ha-opcom-pzu",
+  "integration_type": "service",
+  "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/RaduSimonica/ha-opcom-pzu/issues",
+  "single_config_entry": true,
+  "requirements": [],
+  "version": "0.1.0"
+}
