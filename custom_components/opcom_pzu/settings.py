@@ -7,7 +7,9 @@ from typing import Any, Mapping
 from .arbitrage import BatteryParams
 from .const import (
     CONF_BATTERY_CAPACITY,
+    CONF_BATTERY_CHARGE_POWER,
     CONF_BATTERY_DEGRADATION,
+    CONF_BATTERY_DISCHARGE_POWER,
     CONF_BATTERY_EFFICIENCY,
     CONF_BATTERY_POWER,
     CONF_BUY_FIXED_CHARGES,
@@ -29,7 +31,8 @@ DEFAULTS: dict[str, Any] = {
     CONF_BUY_VAT: 21.0,
     CONF_BUY_FORMULA: "",
     CONF_BATTERY_CAPACITY: 10.0,
-    CONF_BATTERY_POWER: 5.0,
+    CONF_BATTERY_CHARGE_POWER: 5.0,
+    CONF_BATTERY_DISCHARGE_POWER: 5.0,
     CONF_BATTERY_EFFICIENCY: 90.0,
     CONF_BATTERY_DEGRADATION: 0.15,
 }
@@ -52,9 +55,14 @@ def tariff(options: Mapping[str, Any]) -> Tariff:
 
 
 def battery(options: Mapping[str, Any]) -> BatteryParams:
+    # A single "power" limit was used before charge and discharge were split.
+    legacy = options.get(CONF_BATTERY_POWER)
     return BatteryParams(
         capacity_kwh=get(options, CONF_BATTERY_CAPACITY),
-        max_power_kw=get(options, CONF_BATTERY_POWER),
+        max_charge_kw=options.get(CONF_BATTERY_CHARGE_POWER, legacy or DEFAULTS[CONF_BATTERY_CHARGE_POWER]),
+        max_discharge_kw=options.get(
+            CONF_BATTERY_DISCHARGE_POWER, legacy or DEFAULTS[CONF_BATTERY_DISCHARGE_POWER]
+        ),
         round_trip_efficiency=get(options, CONF_BATTERY_EFFICIENCY) / 100,
         degradation_per_kwh=get(options, CONF_BATTERY_DEGRADATION),
     )

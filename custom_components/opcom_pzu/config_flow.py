@@ -7,7 +7,6 @@ from typing import Any
 import voluptuous as vol
 from homeassistant.config_entries import ConfigFlow, ConfigFlowResult, OptionsFlow
 from homeassistant.core import callback
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.selector import (
     EntitySelector,
     EntitySelectorConfig,
@@ -25,9 +24,10 @@ from .api import OpcomClient, OpcomError
 from .const import (
     CONF_BATTERY_CAPACITY,
     CONF_BATTERY_CAPACITY_ENTITY,
+    CONF_BATTERY_CHARGE_POWER,
     CONF_BATTERY_DEGRADATION,
+    CONF_BATTERY_DISCHARGE_POWER,
     CONF_BATTERY_EFFICIENCY,
-    CONF_BATTERY_POWER,
     CONF_BATTERY_SOC_ENTITY,
     CONF_BUY_FIXED_CHARGES,
     CONF_BUY_FORMULA,
@@ -48,6 +48,7 @@ from .const import (
     NAME,
 )
 from .pricing import FormulaError
+from .session import create_session
 
 
 def _num(minimum: float, maximum: float, step: float, unit: str | None = None) -> NumberSelector:
@@ -71,7 +72,7 @@ class OpcomPzuConfigFlow(ConfigFlow, domain=DOMAIN):
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         errors: dict[str, str] = {}
         if user_input is not None:
-            client = OpcomClient(async_get_clientsession(self.hass), CURRENCIES[user_input[CONF_CURRENCY]])
+            client = OpcomClient(create_session(self.hass), CURRENCIES[user_input[CONF_CURRENCY]])
             try:
                 # A published day proves OPCOM is reachable and parseable.
                 await client.fetch_day(dt_util.now().date())
@@ -192,7 +193,8 @@ class OpcomPzuOptionsFlow(OptionsFlow):
     async def async_step_battery(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         schema = {
             vol.Required(CONF_BATTERY_CAPACITY): _num(0.1, 10000, 0.1, "kWh"),
-            vol.Required(CONF_BATTERY_POWER): _num(0.1, 10000, 0.1, "kW"),
+            vol.Required(CONF_BATTERY_CHARGE_POWER): _num(0.01, 10000, 0.01, "kW"),
+            vol.Required(CONF_BATTERY_DISCHARGE_POWER): _num(0.01, 10000, 0.01, "kW"),
             vol.Required(CONF_BATTERY_EFFICIENCY): _num(1, 100, 0.5, "%"),
             vol.Required(CONF_BATTERY_DEGRADATION): _num(0, 100, 0.001),
             vol.Optional(CONF_BATTERY_SOC_ENTITY): _SENSOR,

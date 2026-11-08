@@ -137,3 +137,13 @@ async def test_battery_without_sensor_assumes_empty(hass, entry, aioclient_mock,
     await setup(hass, entry)
     attrs = hass.states.get("sensor.opcom_pzu_battery_net_gain_today").attributes
     assert attrs["starting_energy"] == "assumed empty" and attrs["starting_energy_kwh"] == 0
+
+
+async def test_session_never_keeps_cookies(hass):
+    """opcom.ro answers 403 to sessions that replay its XSRF cookies."""
+    import aiohttp
+
+    from custom_components.opcom_pzu.session import create_session
+
+    session = create_session(hass)
+    assert isinstance(session.cookie_jar, aiohttp.DummyCookieJar)

@@ -58,13 +58,16 @@
         "description": "Folosită pentru a planifica când se merită să cumperi ieftin și să vinzi scump, pe baza prețurilor tale de cumpărare și vânzare.\n\nUn kWh vândut trebuie cumpărat cu mai puțin de: *preț de vânzare − cost de degradare*, înmulțit cu randamentul.\n\n**Bateria ta reală (opțional):** alege un senzor de nivel de încărcare (%, Wh sau kWh) ca planul de azi să pornească de la energia stocată efectiv, și opțional un senzor de capacitate (Wh sau kWh) care înlocuiește capacitatea fixă de mai jos. Fără ele, planul presupune bateria goală.",
         "data": {
           "battery_capacity_kwh": "Capacitate utilizabilă",
-          "battery_power_kw": "Putere maximă încărcare/descărcare",
+          "battery_charge_power_kw": "Putere maximă de încărcare",
+          "battery_discharge_power_kw": "Putere maximă de descărcare",
           "battery_round_trip_efficiency_pct": "Randament dus-întors",
           "battery_degradation_per_kwh": "Cost de degradare per kWh",
           "battery_soc_entity": "Senzor nivel de încărcare (opțional)",
           "battery_capacity_entity": "Senzor capacitate (opțional)"
         },
         "data_description": {
+          "battery_charge_power_kw": "Cea mai mare putere pe care bateria o poate prelua din rețea, în kW, la nivelul rețelei. 300 W = 0,3 kW.",
+          "battery_discharge_power_kw": "Cea mai mare putere pe care o poate livra în rețea, în kW. 1200 W = 1,2 kW. Limitele de încărcare și descărcare sunt adesea diferite.",
           "battery_round_trip_efficiency_pct": "Cât din energia luată din rețea revine: cumpărare → stocare → vânzare. 85-95% e tipic pentru baterii cu litiu.",
           "battery_degradation_per_kwh": "Uzura bateriei per kWh livrat, în {currency}. Aproximativ prețul bateriei per kWh ÷ cicluri de viață (ex. 1500 ÷ 6000 = 0,25).",
           "battery_soc_entity": "Procent, Wh sau kWh. Folosit pentru planul de azi.",
