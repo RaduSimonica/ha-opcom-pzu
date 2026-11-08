@@ -1,0 +1,244 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "OPCOM PZU",
+        "description": "Prețurile vin direct de la OPCOM; nu este nevoie de cont sau cheie.\n\n**Istoric prețuri:** fiecare zi din trecut înseamnă o cerere către OPCOM, trimisă una pe secundă ca să nu supraîncărcăm serverul. 12 luni durează cam 10 minute, arhiva completă (din 2015) peste o oră. Rulează în fundal, poți folosi Home Assistant între timp. Urmărește progresul în **Jurnal** (Logbook) sau pe senzorul *Progres descărcare istoric*. Pune 0 ca să sari peste istoric.",
+        "data": {
+          "currency": "Monedă",
+          "history_months": "Luni de istoric de descărcat"
+        },
+        "data_description": {
+          "currency": "RON folosește prețurile în lei de la OPCOM, EUR pe cele în euro. Nu se poate schimba ulterior.",
+          "history_months": "Cât de departe în urmă se importă prețurile pentru grafice (0 = deloc). Poți schimba ulterior."
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Nu mă pot conecta la OPCOM. Verifică conexiunea la internet și încearcă din nou."
+    },
+    "abort": {
+      "single_instance_allowed": "Deja configurat."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Setări OPCOM PZU",
+        "description": "Alege o pagină de editat. Nimic nu se salvează până nu alegi **Salvează și închide**.",
+        "menu_options": {
+          "buy": "Preț de cumpărare (ce plătești)",
+          "sell": "Preț de vânzare (ce primești)",
+          "battery": "Baterie",
+          "general": "Istoric și prag preț ieftin",
+          "finish": "Salvează și închide"
+        }
+      },
+      "sell": {
+        "title": "Preț de vânzare",
+        "description": "Ce primești când vinzi energie, per kWh.\n\n**Simplu:** primești prețul spot minus un comision, minus o taxă fixă.\n**Avansat:** o formulă înlocuiește câmpurile de mai sus. Folosește `pzu` (prețul spot în {currency}/kWh) și `hour` (ora locală), cu `+ - * / **`, `min`, `max`, `abs`, `round`. Exemplu: `max(pzu*0.9 - 0.05, 0)`.\n\n{preview}\n\n{error}",
+        "data": {
+          "sell_commission_pct": "Comision furnizor",
+          "sell_fixed_fee": "Taxă fixă per kWh",
+          "sell_formula": "Formulă avansată (opțional)"
+        }
+      },
+      "buy": {
+        "title": "Preț de cumpărare",
+        "description": "Ce plătești când cumperi energie, per kWh.\n\n**Simplu:** (preț spot × (1 + adaos) + taxe fixe) × (1 + TVA). Pune distribuția, transportul, certificatele și tarifele furnizorului la *taxe fixe*.\n**Avansat:** o formulă înlocuiește câmpurile de mai sus, aceleași variabile ca la vânzare, și trebuie să includă TVA. Exemplu: `(pzu + 0.45) * 1.21`.\n\n{preview}\n\n{error}",
+        "data": {
+          "buy_markup_pct": "Adaos furnizor",
+          "buy_fixed_charges": "Taxe fixe per kWh (fără TVA)",
+          "buy_vat_pct": "TVA",
+          "buy_formula": "Formulă avansată (opțional)"
+        }
+      },
+      "battery": {
+        "title": "Baterie",
+        "description": "Folosită pentru a planifica când se merită să cumperi ieftin și să vinzi scump, pe baza prețurilor tale de cumpărare și vânzare.\n\nUn kWh vândut trebuie cumpărat cu mai puțin de: *preț de vânzare − cost de degradare*, înmulțit cu randamentul.\n\n**Bateria ta reală (opțional):** alege un senzor de nivel de încărcare (%, Wh sau kWh) ca planul de azi să pornească de la energia stocată efectiv, și opțional un senzor de capacitate (Wh sau kWh) care înlocuiește capacitatea fixă de mai jos. Fără ele, planul presupune bateria goală.",
+        "data": {
+          "battery_capacity_kwh": "Capacitate utilizabilă",
+          "battery_power_kw": "Putere maximă încărcare/descărcare",
+          "battery_round_trip_efficiency_pct": "Randament dus-întors",
+          "battery_degradation_per_kwh": "Cost de degradare per kWh",
+          "battery_soc_entity": "Senzor nivel de încărcare (opțional)",
+          "battery_capacity_entity": "Senzor capacitate (opțional)"
+        },
+        "data_description": {
+          "battery_round_trip_efficiency_pct": "Cât din energia luată din rețea revine: cumpărare → stocare → vânzare. 85-95% e tipic pentru baterii cu litiu.",
+          "battery_degradation_per_kwh": "Uzura bateriei per kWh livrat, în {currency}. Aproximativ prețul bateriei per kWh ÷ cicluri de viață (ex. 1500 ÷ 6000 = 0,25).",
+          "battery_soc_entity": "Procent, Wh sau kWh. Folosit pentru planul de azi.",
+          "battery_capacity_entity": "Capacitate utilizabilă în Wh sau kWh. Înlocuiește capacitatea fixă."
+        }
+      },
+      "general": {
+        "title": "Istoric și praguri",
+        "data": {
+          "history_months": "Luni de istoric",
+          "cheap_percentile": "Prag ieftin/scump"
+        },
+        "data_description": {
+          "cheap_percentile": "Senzorii „preț ieftin acum” și „preț scump acum” se activează pentru cele mai ieftine/scumpe N% intervale din ziua de azi."
+        }
+      }
+    },
+    "error": {
+      "invalid_formula": "Formulă invalidă"
+    }
+  },
+  "entity": {
+    "sensor": {
+      "spot_price": {
+        "name": "Preț spot"
+      },
+      "next_spot_price": {
+        "name": "Următorul preț spot"
+      },
+      "spot_average_today": {
+        "name": "Mediu preț spot azi"
+      },
+      "spot_average_tomorrow": {
+        "name": "Mediu preț spot mâine"
+      },
+      "spot_minimum_today": {
+        "name": "Minim preț spot azi"
+      },
+      "spot_minimum_tomorrow": {
+        "name": "Minim preț spot mâine"
+      },
+      "spot_maximum_today": {
+        "name": "Maxim preț spot azi"
+      },
+      "spot_maximum_tomorrow": {
+        "name": "Maxim preț spot mâine"
+      },
+      "buy_price": {
+        "name": "Preț de cumpărare"
+      },
+      "next_buy_price": {
+        "name": "Următorul preț de cumpărare"
+      },
+      "buy_average_today": {
+        "name": "Mediu preț de cumpărare azi"
+      },
+      "buy_average_tomorrow": {
+        "name": "Mediu preț de cumpărare mâine"
+      },
+      "buy_minimum_today": {
+        "name": "Minim preț de cumpărare azi"
+      },
+      "buy_minimum_tomorrow": {
+        "name": "Minim preț de cumpărare mâine"
+      },
+      "buy_maximum_today": {
+        "name": "Maxim preț de cumpărare azi"
+      },
+      "buy_maximum_tomorrow": {
+        "name": "Maxim preț de cumpărare mâine"
+      },
+      "sell_price": {
+        "name": "Preț de vânzare"
+      },
+      "next_sell_price": {
+        "name": "Următorul preț de vânzare"
+      },
+      "sell_average_today": {
+        "name": "Mediu preț de vânzare azi"
+      },
+      "sell_average_tomorrow": {
+        "name": "Mediu preț de vânzare mâine"
+      },
+      "sell_minimum_today": {
+        "name": "Minim preț de vânzare azi"
+      },
+      "sell_minimum_tomorrow": {
+        "name": "Minim preț de vânzare mâine"
+      },
+      "sell_maximum_today": {
+        "name": "Maxim preț de vânzare azi"
+      },
+      "sell_maximum_tomorrow": {
+        "name": "Maxim preț de vânzare mâine"
+      },
+      "prices_today": {
+        "name": "Prețuri azi"
+      },
+      "prices_tomorrow": {
+        "name": "Prețuri mâine"
+      },
+      "battery_gain_today": {
+        "name": "Câștig net baterie azi"
+      },
+      "battery_gain_tomorrow": {
+        "name": "Câștig net baterie mâine"
+      },
+      "battery_gain_per_kwh_today": {
+        "name": "Câștig net baterie per kWh azi"
+      },
+      "battery_gain_per_kwh_tomorrow": {
+        "name": "Câștig net baterie per kWh mâine"
+      },
+      "battery_action": {
+        "name": "Acțiune baterie",
+        "state": {
+          "charge": "Încărcare",
+          "discharge": "Descărcare",
+          "idle": "Repaus"
+        }
+      },
+      "last_fetch": {
+        "name": "Ultima descărcare a prețurilor"
+      },
+      "history_progress": {
+        "name": "Progres descărcare istoric"
+      }
+    },
+    "binary_sensor": {
+      "tomorrow_published": {
+        "name": "Prețurile de mâine publicate"
+      },
+      "cheap_now": {
+        "name": "Preț ieftin acum"
+      },
+      "expensive_now": {
+        "name": "Preț scump acum"
+      },
+      "battery_profitable_today": {
+        "name": "Arbitraj baterie profitabil azi"
+      },
+      "battery_profitable_tomorrow": {
+        "name": "Arbitraj baterie profitabil mâine"
+      }
+    }
+  },
+  "services": {
+    "refresh": {
+      "name": "Reîmprospătează prețurile",
+      "description": "Descarcă acum prețurile lipsă de la OPCOM."
+    },
+    "backfill_history": {
+      "name": "Descarcă istoricul",
+      "description": "Descarcă prețurile istorice în fundal (o cerere pe secundă); urmărește progresul în Jurnal.",
+      "fields": {
+        "months": {
+          "name": "Luni",
+          "description": "Implicit, durata de istoric configurată."
+        }
+      }
+    },
+    "get_prices": {
+      "name": "Obține prețuri",
+      "description": "Returnează prețurile spot, de cumpărare și vânzare pentru un interval, din istoricul stocat.",
+      "fields": {
+        "start_date": {
+          "name": "Data de început",
+          "description": "Prima zi (ora locală)."
+        },
+        "end_date": {
+          "name": "Data de sfârșit",
+          "description": "Ultima zi, implicit data de început (max. 366 zile)."
+        }
+      }
+    }
+  }
+}

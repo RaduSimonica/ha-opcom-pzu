@@ -1,0 +1,244 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "OPCOM PZU",
+        "description": "Prices come straight from OPCOM; no account or key is needed.\n\n**Price history:** every past day is one request to OPCOM, sent one per second so the server is not overloaded. 12 months take about 10 minutes, the full archive (since 2015) over an hour. It runs in the background and you can use Home Assistant meanwhile. Follow the progress in the **Logbook**, or on the *History download progress* sensor. Set 0 to skip history.",
+        "data": {
+          "currency": "Currency",
+          "history_months": "Months of history to download"
+        },
+        "data_description": {
+          "currency": "RON uses OPCOM's lei prices, EUR its euro prices. This cannot be changed later.",
+          "history_months": "How far back to import prices for graphs (0 = none). You can change this later."
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Cannot reach OPCOM. Check your internet connection and try again."
+    },
+    "abort": {
+      "single_instance_allowed": "Already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "OPCOM PZU settings",
+        "description": "Pick a page to edit. Nothing is saved until you choose **Save and close**.",
+        "menu_options": {
+          "buy": "Buy price (what you pay)",
+          "sell": "Sell price (what you receive)",
+          "battery": "Battery",
+          "general": "History and cheap-price threshold",
+          "finish": "Save and close"
+        }
+      },
+      "sell": {
+        "title": "Sell price",
+        "description": "What you receive when you sell energy, per kWh.\n\n**Simple:** receive spot price minus a commission, minus a fixed fee.\n**Advanced:** a formula replaces the fields above it. Use `pzu` (spot price in {currency}/kWh) and `hour` (local hour), with `+ - * / **`, `min`, `max`, `abs`, `round`. Example: `max(pzu*0.9 - 0.05, 0)`.\n\n{preview}\n\n{error}",
+        "data": {
+          "sell_commission_pct": "Supplier commission",
+          "sell_fixed_fee": "Fixed fee per kWh",
+          "sell_formula": "Advanced formula (optional)"
+        }
+      },
+      "buy": {
+        "title": "Buy price",
+        "description": "What you pay when you buy energy, per kWh.\n\n**Simple:** (spot price × (1 + markup) + fixed charges) × (1 + VAT). Put distribution, transport, certificates and supplier fees in *fixed charges*.\n**Advanced:** a formula replaces the fields above it, same variables as the sell price, and it must include VAT. Example: `(pzu + 0.45) * 1.21`.\n\n{preview}\n\n{error}",
+        "data": {
+          "buy_markup_pct": "Supplier markup",
+          "buy_fixed_charges": "Fixed charges per kWh (before VAT)",
+          "buy_vat_pct": "VAT",
+          "buy_formula": "Advanced formula (optional)"
+        }
+      },
+      "battery": {
+        "title": "Battery",
+        "description": "Used to plan when buying cheap and selling dear pays off, using your buy and sell prices.\n\nA kWh sold must have been bought for less than: *sell price − degradation cost*, multiplied by the efficiency.\n\n**Your real battery (optional):** pick a state-of-charge sensor (%, Wh or kWh) so today's plan starts from what is actually stored, and optionally a capacity sensor (Wh or kWh) to replace the fixed capacity below. Without them the plan assumes an empty battery.",
+        "data": {
+          "battery_capacity_kwh": "Usable capacity",
+          "battery_power_kw": "Maximum charge/discharge power",
+          "battery_round_trip_efficiency_pct": "Round-trip efficiency",
+          "battery_degradation_per_kwh": "Degradation cost per kWh",
+          "battery_soc_entity": "State of charge sensor (optional)",
+          "battery_capacity_entity": "Capacity sensor (optional)"
+        },
+        "data_description": {
+          "battery_round_trip_efficiency_pct": "Share of grid energy that comes back out: buy → store → sell. 85-95% is typical for lithium batteries.",
+          "battery_degradation_per_kwh": "Battery wear per kWh delivered, in {currency}. Roughly battery price per kWh ÷ lifetime cycles (e.g. 1500 ÷ 6000 = 0.25).",
+          "battery_soc_entity": "Percent, Wh or kWh. Used for today's plan.",
+          "battery_capacity_entity": "Usable capacity in Wh or kWh. Replaces the fixed capacity."
+        }
+      },
+      "general": {
+        "title": "History and thresholds",
+        "data": {
+          "history_months": "Months of history",
+          "cheap_percentile": "Cheap/expensive threshold"
+        },
+        "data_description": {
+          "cheap_percentile": "The 'cheap now' and 'expensive now' sensors turn on for the cheapest/dearest N% of today's intervals."
+        }
+      }
+    },
+    "error": {
+      "invalid_formula": "Invalid formula"
+    }
+  },
+  "entity": {
+    "sensor": {
+      "spot_price": {
+        "name": "Spot price"
+      },
+      "next_spot_price": {
+        "name": "Next spot price"
+      },
+      "spot_average_today": {
+        "name": "Average spot price today"
+      },
+      "spot_average_tomorrow": {
+        "name": "Average spot price tomorrow"
+      },
+      "spot_minimum_today": {
+        "name": "Lowest spot price today"
+      },
+      "spot_minimum_tomorrow": {
+        "name": "Lowest spot price tomorrow"
+      },
+      "spot_maximum_today": {
+        "name": "Highest spot price today"
+      },
+      "spot_maximum_tomorrow": {
+        "name": "Highest spot price tomorrow"
+      },
+      "buy_price": {
+        "name": "Buy price"
+      },
+      "next_buy_price": {
+        "name": "Next buy price"
+      },
+      "buy_average_today": {
+        "name": "Average buy price today"
+      },
+      "buy_average_tomorrow": {
+        "name": "Average buy price tomorrow"
+      },
+      "buy_minimum_today": {
+        "name": "Lowest buy price today"
+      },
+      "buy_minimum_tomorrow": {
+        "name": "Lowest buy price tomorrow"
+      },
+      "buy_maximum_today": {
+        "name": "Highest buy price today"
+      },
+      "buy_maximum_tomorrow": {
+        "name": "Highest buy price tomorrow"
+      },
+      "sell_price": {
+        "name": "Sell price"
+      },
+      "next_sell_price": {
+        "name": "Next sell price"
+      },
+      "sell_average_today": {
+        "name": "Average sell price today"
+      },
+      "sell_average_tomorrow": {
+        "name": "Average sell price tomorrow"
+      },
+      "sell_minimum_today": {
+        "name": "Lowest sell price today"
+      },
+      "sell_minimum_tomorrow": {
+        "name": "Lowest sell price tomorrow"
+      },
+      "sell_maximum_today": {
+        "name": "Highest sell price today"
+      },
+      "sell_maximum_tomorrow": {
+        "name": "Highest sell price tomorrow"
+      },
+      "prices_today": {
+        "name": "Prices today"
+      },
+      "prices_tomorrow": {
+        "name": "Prices tomorrow"
+      },
+      "battery_gain_today": {
+        "name": "Battery net gain today"
+      },
+      "battery_gain_tomorrow": {
+        "name": "Battery net gain tomorrow"
+      },
+      "battery_gain_per_kwh_today": {
+        "name": "Battery net gain per kWh today"
+      },
+      "battery_gain_per_kwh_tomorrow": {
+        "name": "Battery net gain per kWh tomorrow"
+      },
+      "battery_action": {
+        "name": "Battery action",
+        "state": {
+          "charge": "Charge",
+          "discharge": "Discharge",
+          "idle": "Idle"
+        }
+      },
+      "last_fetch": {
+        "name": "Last price download"
+      },
+      "history_progress": {
+        "name": "History download progress"
+      }
+    },
+    "binary_sensor": {
+      "tomorrow_published": {
+        "name": "Tomorrow's prices published"
+      },
+      "cheap_now": {
+        "name": "Cheap price now"
+      },
+      "expensive_now": {
+        "name": "Expensive price now"
+      },
+      "battery_profitable_today": {
+        "name": "Battery arbitrage profitable today"
+      },
+      "battery_profitable_tomorrow": {
+        "name": "Battery arbitrage profitable tomorrow"
+      }
+    }
+  },
+  "services": {
+    "refresh": {
+      "name": "Refresh prices",
+      "description": "Fetch missing prices from OPCOM now."
+    },
+    "backfill_history": {
+      "name": "Download history",
+      "description": "Download historic prices in the background (one request per second); follow progress in the Logbook.",
+      "fields": {
+        "months": {
+          "name": "Months",
+          "description": "Defaults to the configured history length."
+        }
+      }
+    },
+    "get_prices": {
+      "name": "Get prices",
+      "description": "Return spot, buy and sell prices for a date range from the stored history.",
+      "fields": {
+        "start_date": {
+          "name": "Start date",
+          "description": "First day (local time)."
+        },
+        "end_date": {
+          "name": "End date",
+          "description": "Last day, defaults to the start date (max. 366 days)."
+        }
+      }
+    }
+  }
+}
