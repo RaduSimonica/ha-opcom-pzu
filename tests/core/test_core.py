@@ -76,7 +76,7 @@ def _slots(prices):
 
 def test_plan_profitable_and_ordering():
     prices = [0.3] * 8 + [1.5] * 8
-    p = plan(_slots(prices), 0.25, BatteryParams(10, 10, 0.9, 0.1))
+    p = plan(_slots(prices), 0.25, BatteryParams(10, 10, 10, 0.9, 0.1))
     assert p.profitable
     charges = [s.start for s in p.slots if s.action == "charge"]
     discharges = [s.start for s in p.slots if s.action == "discharge"]
@@ -88,18 +88,18 @@ def test_plan_profitable_and_ordering():
 
 
 def test_plan_not_profitable_when_spread_too_small():
-    p = plan(_slots([0.50] * 8 + [0.52] * 8), 0.25, BatteryParams(10, 10, 0.9, 0.1))
+    p = plan(_slots([0.50] * 8 + [0.52] * 8), 0.25, BatteryParams(10, 10, 10, 0.9, 0.1))
     assert not p.profitable and p.net_gain == 0 and p.slots == []
 
 
 def test_plan_respects_power_limit():
-    p = plan(_slots([0.1] * 4 + [2.0] * 4), 0.25, BatteryParams(100, 4, 1.0, 0))
+    p = plan(_slots([0.1] * 4 + [2.0] * 4), 0.25, BatteryParams(100, 4, 4, 1.0, 0))
     assert p.energy_sold_kwh <= 4 * 0.25 * 4 + 1e-9  # 4 kW for 4 slots of 15 min
 
 
 def test_plan_multiple_cycles():
     prices = [0.2] * 4 + [1.5] * 4 + [0.2] * 4 + [1.5] * 4
-    p = plan(_slots(prices), 0.25, BatteryParams(2, 8, 1.0, 0))
+    p = plan(_slots(prices), 0.25, BatteryParams(2, 8, 8, 1.0, 0))
     assert p.cycles == pytest.approx(2, abs=0.1)
 
 
@@ -108,7 +108,7 @@ def test_plan_sells_energy_already_in_battery():
     t0 = datetime(2026, 1, 1, tzinfo=timezone.utc)
     sell = [0.5] * 8 + [2.0] * 4
     slots = [Slot(t0 + timedelta(minutes=15 * i), 3.0, p) for i, p in enumerate(sell)]
-    p = plan(slots, 0.25, BatteryParams(10, 10, 0.9, 0.1), initial_kwh=5)
+    p = plan(slots, 0.25, BatteryParams(10, 10, 10, 0.9, 0.1), initial_kwh=5)
     assert p.profitable and p.energy_bought_kwh == 0
     assert 4 < p.energy_sold_kwh <= 5  # most of the stored energy goes out, none is invented
     assert p.gain_per_kwh_bought is None and p.break_even_sell_price is None
@@ -116,12 +116,43 @@ def test_plan_sells_energy_already_in_battery():
 
 
 def test_plan_full_battery_cannot_charge_more():
-    p = plan(_slots([0.1] * 4 + [2.0] * 4), 0.25, BatteryParams(4, 20, 1.0, 0), initial_kwh=4)
+    p = plan(_slots([0.1] * 4 + [2.0] * 4), 0.25, BatteryParams(4, 20, 20, 1.0, 0), initial_kwh=4)
     assert p.energy_bought_kwh == 0 and p.energy_sold_kwh == pytest.approx(4, abs=0.3)
 
 
 def test_plan_initial_energy_never_hurts():
     prices = [0.3] * 6 + [1.4] * 6
-    base = plan(_slots(prices), 0.25, BatteryParams(10, 10, 0.9, 0.1))
-    more = plan(_slots(prices), 0.25, BatteryParams(10, 10, 0.9, 0.1), initial_kwh=3)
+    base = plan(_slots(prices), 0.25, BatteryParams(10, 10, 10, 0.9, 0.1))
+    more = plan(_slots(prices), 0.25, BatteryParams(10, 10, 10, 0.9, 0.1), initial_kwh=3)
     assert more.net_gain >= base.net_gain - 1e-9
+
+
+def test_plan_different_charge_and_discharge_power():
+    # Slow 0.3 kW charge, fast 1.2 kW discharge: a day of cheap hours, a short dear peak.
+    prices = [0.3] * 64 + [2.0] * 8 + [0.3] * 24
+    p = plan(_slots(prices), 0.25, BatteryParams(10, 0.3, 1.2, 0.9, 0.1))
+    assert p.profitable
+    for slot in p.slots:
+        limit = 0.3 * 0.25 if slot.action == "charge" else 1.2 * 0.25
+        assert slot.grid_kwh <= limit + 1e-9  # each direction keeps to its own limit
+    assert max(s.grid_kwh for s in p.slots if s.action == "discharge") > 0.3 * 0.25  # faster out than in
+    assert p.energy_sold_kwh <= 1.2 * 0.25 * 8 + 1e-9  # the peak is only 8 slots long
+
+
+def test_plan_asymmetry_the_other_way():
+    prices = [0.3] * 8 + [2.0] * 64 + [0.3] * 24
+    p = plan(_slots(prices), 0.25, BatteryParams(10, 1.2, 0.3, 0.9, 0.1))
+    assert p.profitable
+    assert all(s.grid_kwh <= 1.2 * 0.25 + 1e-9 for s in p.slots if s.action == "charge")
+    assert all(s.grid_kwh <= 0.3 * 0.25 + 1e-9 for s in p.slots if s.action == "discharge")
+
+
+def test_settings_battery_power_split_and_legacy():
+    from custom_components.opcom_pzu import settings
+
+    split = settings.battery({"battery_charge_power_kw": 0.3, "battery_discharge_power_kw": 1.2})
+    assert (split.max_charge_kw, split.max_discharge_kw) == (0.3, 1.2)
+    old = settings.battery({"battery_power_kw": 3.0})  # saved before the split
+    assert (old.max_charge_kw, old.max_discharge_kw) == (3.0, 3.0)
+    new = settings.battery({})
+    assert new.max_charge_kw == new.max_discharge_kw == 5.0

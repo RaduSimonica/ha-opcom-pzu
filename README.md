@@ -10,7 +10,7 @@ Romanian day-ahead (PZU) electricity prices in Home Assistant: free, no account,
 
 ## Install
 
-HACS → Custom repositories → add this repository as *Integration* → install → restart. Then *Settings → Devices & services → Add integration → OPCOM PZU*.
+HACS → Custom repositories → add this repository as *Integration* → install → restart. HACS shows the released version (see the [changelog](CHANGELOG.md)). Then *Settings → Devices & services → Add integration → OPCOM PZU*.
 
 ## Setup
 
@@ -31,7 +31,7 @@ Formulas are plain arithmetic over `pzu` (spot, currency/kWh) and `hour` (local 
 
 ## Battery planner
 
-*Configure → Battery:* usable capacity, max power, round-trip efficiency, degradation cost per kWh delivered. Optionally pick your own sensors:
+*Configure → Battery:* usable capacity, **maximum charge power and maximum discharge power** (they are often different, e.g. 0.3 kW in and 1.2 kW out), round-trip efficiency, degradation cost per kWh delivered. Optionally pick your own sensors:
 
 - **State of charge** (%, Wh or kWh): today's plan then starts from the energy actually in the battery and covers the remaining intervals. It is re-planned every 15 minutes.
 - **Capacity** (Wh or kWh): replaces the fixed capacity, e.g. when your inverter reports usable capacity.
@@ -90,6 +90,8 @@ OPCOM's auction closes at 13:00 Romanian time and results appear roughly 13:45. 
 - Not affiliated with OPCOM.
 
 ## Development
+
+See [CONTRIBUTING.md](CONTRIBUTING.md): each pull request into `main` bumps the version and gets a release.
 
 ```
 uv venv && uv pip install pytest-homeassistant-custom-component

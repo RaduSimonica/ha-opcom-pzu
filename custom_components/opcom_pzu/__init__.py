@@ -18,7 +18,6 @@ from homeassistant.core import (
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import entity_registry as er
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.start import async_at_started
 from homeassistant.helpers.typing import ConfigType
 from homeassistant.util import dt as dt_util
@@ -35,6 +34,7 @@ from .const import (
 from .coordinator import PzuCoordinator
 from .history import Backfill
 from .series import Series, local_day_bounds
+from .session import create_session
 from .store import PriceStore
 
 PLATFORMS = [Platform.SENSOR, Platform.BINARY_SENSOR]
@@ -122,7 +122,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: PzuConfigEntry) -> bool:
-    client = OpcomClient(async_get_clientsession(hass), CURRENCIES[entry.data[CONF_CURRENCY]])
+    client = OpcomClient(create_session(hass), CURRENCIES[entry.data[CONF_CURRENCY]])
     store = PriceStore(hass, entry.entry_id)
     coordinator = PzuCoordinator(hass, entry, client, store)
 

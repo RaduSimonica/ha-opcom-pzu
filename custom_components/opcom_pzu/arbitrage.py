@@ -22,13 +22,14 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from math import sqrt
 
-MAX_SOC_UNITS = 60
+MAX_SOC_UNITS = 300
 
 
 @dataclass(frozen=True, slots=True)
 class BatteryParams:
     capacity_kwh: float = 10.0  # usable
-    max_power_kw: float = 5.0
+    max_charge_kw: float = 5.0  # drawn from the grid
+    max_discharge_kw: float = 5.0  # delivered to the grid
     round_trip_efficiency: float = 0.90  # 0 < x <= 1, grid -> battery -> grid
     degradation_per_kwh: float = 0.15  # cost per kWh delivered to the grid
 
@@ -71,26 +72,27 @@ def plan(
 ) -> Plan:
     """Best schedule over ``slots`` (equal length ``step_hours`` each)."""
     result = Plan()
-    if len(slots) < 2 or params.capacity_kwh <= 0 or params.max_power_kw <= 0:
+    if len(slots) < 2 or params.capacity_kwh <= 0 or params.max_charge_kw <= 0 or params.max_discharge_kw <= 0:
         return result
     eff = min(max(params.round_trip_efficiency, 0.01), 1.0)
     eff_one_way = sqrt(eff)
 
-    # Discretise stored energy. The grain follows the power limit (in stored
-    # kWh a slot can move 'per_slot * eff_one_way' when charging); the usable
-    # capacity is capped by what the horizon could ever fill, which keeps the
-    # state space small for large batteries.
+    # Discretise stored energy. What a slot can move, in stored kWh, differs
+    # for charging and discharging (the batteries and inverters often differ),
+    # and sets the grain. Capacity beyond what the horizon could ever fill is
+    # ignored, which keeps the state space small for large batteries.
     n = len(slots)
-    per_slot = params.max_power_kw * step_hours
+    charge_cap = params.max_charge_kw * step_hours * eff_one_way
+    discharge_cap = params.max_discharge_kw * step_hours / eff_one_way
     initial_kwh = min(max(initial_kwh, 0.0), params.capacity_kwh)
-    capacity = min(params.capacity_kwh, n / 2 * per_slot * eff_one_way + initial_kwh)
-    # Fine enough to resolve both a slot's power and the (maybe small) capacity.
-    step = min(per_slot * eff_one_way / 2, capacity / 10)
+    capacity = min(params.capacity_kwh, n * charge_cap + initial_kwh)
+    step = min(charge_cap, discharge_cap, capacity / 10) / 2
+    capacity = min(capacity, MAX_SOC_UNITS * step)
     units = int(capacity / step + 1e-9)
     if units < 1:
         return result
-    max_charge = max(1, int(per_slot * eff_one_way / step + 1e-9))
-    max_discharge = max(1, int(per_slot / eff_one_way / step + 1e-9))
+    max_charge = max(1, int(charge_cap / step + 1e-9))
+    max_discharge = max(1, int(discharge_cap / step + 1e-9))
 
     neg = float("-inf")
     # value[t][s]: best profit from slot t on, if we hold s units entering t.
