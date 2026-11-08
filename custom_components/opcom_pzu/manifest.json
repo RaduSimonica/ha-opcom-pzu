@@ -2,6 +2,7 @@
   "domain": "opcom_pzu",
   "name": "OPCOM PZU",
   "after_dependencies": ["logbook"],
+  "categories": ["energy.energy_prices"],
   "codeowners": ["@RaduSimonica"],
   "config_flow": true,
   "dependencies": ["recorder"],
