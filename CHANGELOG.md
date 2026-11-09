@@ -6,6 +6,21 @@ publishes a GitHub release with this section as its notes, which is what HACS
 shows as the version. Versions follow [semantic versioning](https://semver.org):
 `0.x.0` for new features, `0.x.y` for fixes.
 
+## [0.2.1] - 2026-11-09
+
+### Fixed
+- **Price statistics now keep up while Home Assistant runs.** New hours were only added to the long-term statistics after a restart; they are now added every 15 minutes.
+- **Emptied fields in the options are really cleared.** Removing a formula or a fee in the buy/sell pages had no effect before.
+- A formula that has no answer for some prices (division by zero, a square root of a negative price) no longer breaks every sensor: the simple fields are used for that price and a warning is logged.
+- The battery plan can sell stored energy in the last interval of the day, and the interval in progress only counts the power still available in it.
+- The history download no longer gets stuck on a day that OPCOM keeps answering with an HTTP error: the day is skipped for now and retried on the next run (it pauses only if several days in a row fail).
+- A stray footer line after the price table no longer discards the whole day; prices written like `1,234.56` are read correctly.
+- The *Last price download* sensor keeps its value after a restart.
+- *Cheap price now* and *Expensive price now* are both off on a day with a flat price.
+- `opcom_pzu.get_prices` lists the days it has no data for (`missing_days`).
+- A failed setup no longer leaves a timer behind, and reloading no longer leaves HTTP sessions open.
+- The example dashboard cards now explain that entity IDs can carry the device's area as a prefix (e.g. `sensor.server_opcom_pzu_upcoming_prices`), and what to do when a card says "Entity not available".
+
 ## [0.2.0] - 2026-11-09
 
 ### Added

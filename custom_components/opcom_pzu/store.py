@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from typing import Any
 
 from homeassistant.core import HomeAssistant
@@ -44,15 +44,22 @@ class PriceStore:
         )
         self._days: dict[str, dict[str, Any]] = {}
         self._missing: set[str] = set()  # days OPCOM has no data for
+        self.last_fetch: datetime | None = None
 
     async def async_load(self) -> None:
         data = await self._store.async_load() or {}
         self._days = data.get("days", {})
         self._missing = set(data.get("missing", []))
+        raw = data.get("last_fetch")
+        self.last_fetch = datetime.fromisoformat(raw) if raw else None
 
     async def async_save(self) -> None:
         await self._store.async_save(
-            {"days": self._days, "missing": sorted(self._missing)}
+            {
+                "days": self._days,
+                "missing": sorted(self._missing),
+                "last_fetch": self.last_fetch.isoformat() if self.last_fetch else None,
+            }
         )
 
     def get(self, day: date) -> DayPrices | None:

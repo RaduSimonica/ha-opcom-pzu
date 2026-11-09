@@ -33,6 +33,8 @@ def _rank(c: PzuCoordinator, cheap: bool, percentile: int) -> bool | None:
     if not pts or not now:
         return None
     prices = sorted(c.buy(p) for p in pts)
+    if prices[0] == prices[-1]:
+        return False  # a flat day has no cheap or expensive hours
     idx = max(0, round(len(prices) * percentile / 100) - 1)
     current = c.buy(now)
     return current <= prices[idx] if cheap else current >= prices[-1 - idx]

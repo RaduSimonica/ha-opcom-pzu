@@ -90,8 +90,15 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         window = (local_day_bounds(start, tz)[0], local_day_bounds(end, tz)[1])
         days = (store.get(start + timedelta(days=n)) for n in range(-1, (end - start).days + 2))
         points = Series(d for d in days if d).window(*window)
+        have = {dt_util.as_local(p.start).date() for p in points}
+        missing = [
+            (start + timedelta(days=n)).isoformat()
+            for n in range((end - start).days + 1)
+            if start + timedelta(days=n) not in have
+        ]
         return {
             "unit": f"{c.currency}/kWh",
+            "missing_days": missing,  # not downloaded (yet): see opcom_pzu.backfill_history
             "prices": [
                 {
                     "start": dt_util.as_local(p.start).isoformat(),
@@ -122,7 +129,9 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: PzuConfigEntry) -> bool:
-    client = OpcomClient(create_session(hass), CURRENCIES[entry.data[CONF_CURRENCY]])
+    session = create_session(hass)
+    entry.async_on_unload(session.close)  # a reload must not leave sessions behind
+    client = OpcomClient(session, CURRENCIES[entry.data[CONF_CURRENCY]])
     store = PriceStore(hass, entry.entry_id)
     coordinator = PzuCoordinator(hass, entry, client, store)
 

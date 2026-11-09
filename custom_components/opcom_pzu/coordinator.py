@@ -74,20 +74,29 @@ class PzuCoordinator(DataUpdateCoordinator[PzuData]):
     async def async_start(self) -> None:
         """Load the cache, fetch what is missing and start the clock ticks."""
         await self.store.async_load()
+        self.last_fetch = self.store.last_fetch
+        # Registered first, so a failed first refresh does not leave a timer behind.
+        self.config_entry.async_on_unload(self._cancel_timer)
         await self.async_config_entry_first_refresh()
         self.config_entry.async_on_unload(
             async_track_utc_time_change(
                 self.hass, self._tick, minute=(0, 15, 30, 45), second=2
             )
         )
-        self.config_entry.async_on_unload(self._cancel_timer)
 
     @callback
     def _tick(self, _now: datetime) -> None:
         if dt_util.now().date() != self._built_for:
             self.hass.async_create_task(self.async_refresh())  # day rolled over
         else:
+            self._import_recent()  # keep the long-term statistics current
             self.hass.async_create_task(self._async_replan())  # battery level moves
+
+    def _import_recent(self) -> None:
+        """Long-term statistics for the hours that have passed (idempotent)."""
+        days = [d for day in self._wanted_days() if (d := self.store.get(day))]
+        if days:
+            import_statistics(self.hass, self.currency, days)
 
     def _cancel_timer(self) -> None:
         if self._timer:
@@ -133,10 +142,10 @@ class PzuCoordinator(DataUpdateCoordinator[PzuData]):
                 self.store.put(prices)
                 fetched.append(prices)
                 self._retry_at.pop(day, None)
-                self.last_fetch = now
+                self.last_fetch = self.store.last_fetch = now
             if fetched:
                 await self.store.async_save()
-                import_statistics(self.hass, self.currency, fetched)
+            self._import_recent()
 
             series = Series(
                 d for day in self._wanted_days() if (d := self.store.get(day))
@@ -247,6 +256,10 @@ class PzuCoordinator(DataUpdateCoordinator[PzuData]):
             if not points:
                 continue
             slots = [Slot(p.start, self.buy(p), self.sell(p)) for p in points]
+            if offset == 0:  # the interval in progress has only part of its time left
+                first = points[0]
+                left = (first.end - max(now, first.start)) / (first.end - first.start)
+                slots[0] = replace(slots[0], fraction=left)
             hours = (points[0].end - points[0].start).total_seconds() / 3600
             start_energy = energy if offset == 0 else 0.0
             plans[offset] = plan(slots, hours, params, start_energy)

@@ -72,13 +72,16 @@ class OpcomPzuConfigFlow(ConfigFlow, domain=DOMAIN):
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         errors: dict[str, str] = {}
         if user_input is not None:
-            client = OpcomClient(create_session(self.hass), CURRENCIES[user_input[CONF_CURRENCY]])
+            session = create_session(self.hass)
+            client = OpcomClient(session, CURRENCIES[user_input[CONF_CURRENCY]])
             try:
                 # A published day proves OPCOM is reachable and parseable.
                 await client.fetch_day(dt_util.now().date())
             except OpcomError:
                 errors["base"] = "cannot_connect"
-            else:
+            finally:
+                await session.close()
+            if not errors:
                 return self.async_create_entry(
                     title=NAME,
                     data={
@@ -162,6 +165,9 @@ class OpcomPzuOptionsFlow(OptionsFlow):
                            user_input: dict[str, Any] | None) -> ConfigFlowResult:
         if user_input is not None:
             candidate = self._options | user_input
+            for key in schema:  # an emptied field is left out of the submission
+                if key.schema not in user_input:
+                    candidate[key.schema] = "" if key.schema.endswith("_formula") else 0.0
             try:
                 settings.tariff(candidate).compile()
             except FormulaError as err:

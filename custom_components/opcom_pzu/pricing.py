@@ -10,6 +10,7 @@ All prices here are per kWh. Two modes exist for both directions:
 from __future__ import annotations
 
 import ast
+import logging
 import math
 import operator
 from dataclasses import dataclass
@@ -35,11 +36,16 @@ _FUNCS: dict[str, Callable[..., float]] = {
     "floor": math.floor,
     "ceil": math.ceil,
 }
+_LOGGER = logging.getLogger(__name__)
 VARIABLES = ("pzu", "hour")
 
 
 class FormulaError(ValueError):
     """The formula is invalid."""
+
+
+class FormulaMathError(FormulaError):
+    """The formula is valid but cannot be computed for this price (e.g. 1/0)."""
 
 
 def _eval(node: ast.AST, env: dict[str, float]) -> float:
@@ -76,14 +82,23 @@ class Formula:
             raise FormulaError(f"Syntax error: {err.msg}") from err
         # Dry run so every error surfaces when the user saves the form.
         try:
-            self(0.5, 12)
+            self._compute(0.5, 12)
         except ZeroDivisionError:
             pass
-        except (TypeError, OverflowError) as err:
+        except (TypeError, OverflowError, ValueError) as err:
             raise FormulaError(str(err)) from err
 
-    def __call__(self, pzu: float, hour: int) -> float:
+    def _compute(self, pzu: float, hour: int) -> float:
         return float(_eval(self._tree, {"pzu": pzu, "hour": float(hour)}))
+
+    def __call__(self, pzu: float, hour: int) -> float:
+        """Prices can be zero or negative, where some formulas have no answer."""
+        try:
+            return self._compute(pzu, hour)
+        except (ZeroDivisionError, OverflowError, TypeError, ValueError) as err:
+            raise FormulaMathError(
+                f"'{self.expression}' cannot be computed for pzu={pzu}: {err}"
+            ) from err
 
 
 @dataclass(frozen=True, slots=True)
@@ -113,18 +128,30 @@ class CompiledTariff:
         self.tariff = tariff
         self._sell = sell
         self._buy = buy
+        self._warned: set[str] = set()
+
+    def _guard(self, formula: Formula, pzu: float, hour: int, fallback: float) -> float:
+        try:
+            return formula(pzu, hour)
+        except FormulaMathError as err:
+            if formula.expression not in self._warned:
+                self._warned.add(formula.expression)
+                _LOGGER.warning("%s; using the simple fields for this price instead", err)
+            return fallback
 
     def sell_price(self, pzu: float, hour: int = 0) -> float:
-        if self._sell:
-            return self._sell(pzu, hour)
         t = self.tariff
-        return pzu * (1 - t.sell_commission_pct / 100) - t.sell_fixed_fee
+        simple = pzu * (1 - t.sell_commission_pct / 100) - t.sell_fixed_fee
+        if self._sell:
+            return self._guard(self._sell, pzu, hour, simple)
+        return simple
 
     def buy_price(self, pzu: float, hour: int = 0) -> float:
-        if self._buy:
-            return self._buy(pzu, hour)
         t = self.tariff
-        return (pzu * (1 + t.buy_markup_pct / 100) + t.buy_fixed_charges) * (1 + t.buy_vat_pct / 100)
+        simple = (pzu * (1 + t.buy_markup_pct / 100) + t.buy_fixed_charges) * (1 + t.buy_vat_pct / 100)
+        if self._buy:
+            return self._guard(self._buy, pzu, hour, simple)
+        return simple
 
     def describe(self) -> dict[str, Any]:
         return {"sell": self._sell.expression if self._sell else "pzu*(1-commission)-fee",

@@ -39,6 +39,7 @@ class Slot:
     start: datetime
     buy_price: float
     sell_price: float
+    fraction: float = 1.0  # share of the interval still ahead (power limits scale with it)
 
 
 @dataclass(frozen=True, slots=True)
@@ -72,7 +73,7 @@ def plan(
 ) -> Plan:
     """Best schedule over ``slots`` (equal length ``step_hours`` each)."""
     result = Plan()
-    if len(slots) < 2 or params.capacity_kwh <= 0 or params.max_charge_kw <= 0 or params.max_discharge_kw <= 0:
+    if not slots or (len(slots) < 2 and initial_kwh <= 0) or params.capacity_kwh <= 0 or params.max_charge_kw <= 0 or params.max_discharge_kw <= 0:
         return result
     eff = min(max(params.round_trip_efficiency, 0.01), 1.0)
     eff_one_way = sqrt(eff)
@@ -102,10 +103,13 @@ def plan(
     value[n] = [0.0] * (units + 1)
     for t in range(n - 1, -1, -1):
         slot = slots[t]
+        frac = min(max(slot.fraction, 0.0), 1.0)
+        slot_charge = int(max_charge * frac + 1e-9)
+        slot_discharge = int(max_discharge * frac + 1e-9)
         for s in range(units + 1):
             # Idle first, so a tie never causes pointless cycling.
             best, best_move = value[t + 1][s], 0
-            for move in range(-min(s, max_discharge), min(units - s, max_charge) + 1):
+            for move in range(-min(s, slot_discharge), min(units - s, slot_charge) + 1):
                 nxt = value[t + 1][s + move]
                 if move == 0 or nxt == neg:
                     continue

@@ -34,6 +34,10 @@ class OpcomError(Exception):
     """OPCOM could not be reached or returned something unusable."""
 
 
+class OpcomHTTPError(OpcomError):
+    """OPCOM answered with an HTTP error status."""
+
+
 class OpcomParseError(OpcomError):
     """The CSV did not look like a PZU report."""
 
@@ -72,7 +76,11 @@ def day_bounds(day: date) -> tuple[datetime, datetime]:
 
 
 def _num(text: str) -> float:
-    return float(text.strip().replace(",", "."))
+    """Parse a number written as 1234.5, 1234,5 or 1,234.5."""
+    text = text.strip()
+    if "," in text and "." in text:
+        text = text.replace(",", "")
+    return float(text.replace(",", "."))
 
 
 def parse_csv(text: str, day: date) -> DayPrices:
@@ -91,6 +99,8 @@ def parse_csv(text: str, day: date) -> DayPrices:
             try:
                 prices.append((_num(row[2]), _num(row[3]) if len(row) > 3 else None))
             except (ValueError, IndexError) as err:
+                if prices:
+                    break  # a footer after the table; a missing row fails the count check
                 raise OpcomParseError(f"Bad interval row {row!r}") from err
         elif first.startswith("ROPEX_DAM_"):
             key = (
@@ -148,7 +158,7 @@ class OpcomClient:
                 timeout=aiohttp.ClientTimeout(total=REQUEST_TIMEOUT),
             ) as resp:
                 if resp.status != 200:
-                    raise OpcomError(f"HTTP {resp.status} for {day}")
+                    raise OpcomHTTPError(f"HTTP {resp.status} for {day}")
                 body = await resp.read()
         except (aiohttp.ClientError, TimeoutError) as err:
             raise OpcomError(f"Cannot reach OPCOM: {err}") from err

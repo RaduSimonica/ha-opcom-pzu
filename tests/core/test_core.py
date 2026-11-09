@@ -156,3 +156,58 @@ def test_settings_battery_power_split_and_legacy():
     assert (old.max_charge_kw, old.max_discharge_kw) == (3.0, 3.0)
     new = settings.battery({})
     assert new.max_charge_kw == new.max_discharge_kw == 5.0
+
+
+# -- regressions found in the QA pass ----------------------------------------
+
+
+def test_formula_without_an_answer_falls_back_to_simple_fields(caplog):
+    # Negative and zero prices exist; some formulas have no answer for them.
+    tariff = Tariff(buy_formula="1/pzu", sell_formula="pzu**0.5", sell_commission_pct=10).compile()
+    assert tariff.buy_price(0.0) == pytest.approx(0.0 * 1.21)  # falls back to (pzu*..)*(1+VAT=0)
+    assert tariff.sell_price(-0.1) == pytest.approx(-0.09)  # complex result -> simple fields
+    assert tariff.sell_price(0.25) == pytest.approx(0.5)  # normal prices still use the formula
+    assert caplog.text.count("cannot be computed") == 2  # warned once per formula, not per price
+
+
+def test_footer_after_the_table_is_ignored():
+    text = (FIX / "ro_09-11-2026.csv").read_text(encoding="utf-8") + '\n"Note","footer text"\n'
+    assert len(parse_csv(text, date(2026, 11, 9)).intervals) == 96
+
+
+def test_a_missing_row_still_fails():
+    lines = (FIX / "ro_09-11-2026.csv").read_text(encoding="utf-8").splitlines()
+    cut = [ln for i, ln in enumerate(lines) if i != len(lines) - 5]
+    with pytest.raises(OpcomParseError):
+        parse_csv("\n".join(cut), date(2026, 11, 9))
+
+
+def test_number_formats():
+    from custom_components.opcom_pzu.api import _num
+
+    assert _num("1234.5") == _num("1234,5") == _num("1,234.5") == 1234.5
+
+
+def test_stored_energy_can_be_sold_in_the_last_interval():
+    p = plan([Slot(datetime(2026, 1, 1, tzinfo=timezone.utc), 0.5, 3.0)], 0.25, BatteryParams(10, 5, 5), initial_kwh=5)
+    assert p.profitable and p.slots[0].action == "discharge"
+    # Without stored energy one interval is not enough to do anything.
+    assert not plan([Slot(datetime(2026, 1, 1, tzinfo=timezone.utc), 0.5, 3.0)], 0.25, BatteryParams()).profitable
+
+
+def test_partial_interval_limits_power():
+    t0 = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    params = BatteryParams(10, 4, 4, 1.0, 0.0)  # 1 kWh per full 15 min interval
+    full = plan([Slot(t0, 3.0, 3.0), Slot(t0 + timedelta(minutes=15), 3.0, 3.0)], 0.25, params, 4.0)
+    half = plan([Slot(t0, 3.0, 3.0, fraction=0.5), Slot(t0 + timedelta(minutes=15), 3.0, 3.0)], 0.25, params, 4.0)
+    assert half.energy_sold_kwh < full.energy_sold_kwh  # the planner's grain is coarse, so no exact kWh
+    assert half.energy_sold_kwh <= 1.5 + 1e-9 and full.energy_sold_kwh > 1.5
+
+
+def test_window_includes_an_interval_in_progress():
+    from custom_components.opcom_pzu.series import Series
+
+    d = load("ro_09-11-2026.csv", date(2026, 11, 9))
+    s = Series([d])
+    start = d.intervals[10].start + timedelta(minutes=5)
+    assert s.window(start, start + timedelta(minutes=20))[0].start == d.intervals[10].start
