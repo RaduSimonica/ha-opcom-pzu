@@ -115,24 +115,31 @@ def _stat_attrs(kind: str, offset: int, field: str) -> Callable[[PzuCoordinator]
     return attrs
 
 
-def _series_attrs(offset: int) -> Callable[[PzuCoordinator], dict[str, Any]]:
-    def attrs(c: PzuCoordinator) -> dict[str, Any]:
-        pts = c.local_points(offset) or []
-        return {
-            "unit": f"{c.currency}/kWh",
-            "prices": [
-                {
-                    "start": _local(p.start),
-                    "end": _local(p.end),
-                    "spot": round(p.pzu, 5),
-                    "buy": round(c.buy(p), 5),
-                    "sell": round(c.sell(p), 5),
-                }
-                for p in pts
-            ],
-        }
+def _price_rows(c: PzuCoordinator, points: list[Point]) -> dict[str, Any]:
+    """The attributes of a price series, ready for charts."""
+    return {
+        "unit": f"{c.currency}/kWh",
+        "prices": [
+            {
+                "start": _local(p.start),
+                "end": _local(p.end),
+                "spot": round(p.pzu, 5),
+                "buy": round(c.buy(p), 5),
+                "sell": round(c.sell(p), 5),
+            }
+            for p in points
+        ],
+    }
 
-    return attrs
+
+def _series_attrs(offset: int) -> Callable[[PzuCoordinator], dict[str, Any]]:
+    return lambda c: _price_rows(c, c.local_points(offset) or [])
+
+
+def _upcoming(c: PzuCoordinator) -> list[Point]:
+    """Every known interval from the current one onwards (today, then tomorrow)."""
+    now = datetime.now(timezone.utc)
+    return [p for p in c.data.series.points if p.end > now]
 
 
 def _plan_attrs(offset: int) -> Callable[[PzuCoordinator], dict[str, Any]]:
@@ -220,6 +227,10 @@ def _descriptions() -> list[PzuSensorDescription]:
         out.append(PzuSensorDescription(
             key=f"battery_gain_per_kwh_{day}", unit_kind="price", suggested_display_precision=3,
             value_fn=_plan_value(offset, "gain_per_kwh_sold")))
+    out.append(PzuSensorDescription(
+        key="upcoming_prices", entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda c: len(_upcoming(c)) or None,
+        attrs_fn=lambda c: _price_rows(c, _upcoming(c))))
     out.append(PzuSensorDescription(
         key="battery_action", device_class=SensorDeviceClass.ENUM,
         options=["charge", "discharge", "idle"],

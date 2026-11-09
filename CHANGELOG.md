@@ -6,6 +6,12 @@ publishes a GitHub release with this section as its notes, which is what HACS
 shows as the version. Versions follow [semantic versioning](https://semver.org):
 `0.x.0` for new features, `0.x.y` for fixes.
 
+## [0.2.0] - 2026-11-09
+
+### Added
+- **Upcoming prices** sensor: every known interval from now on (the rest of today and tomorrow once published) with spot, buy and sell price, refreshed every 15 minutes. One entity is enough for a "prices from now" chart.
+- Ready-to-paste dashboard cards in `examples/dashboards/` (need apexcharts-card): today's price profile, prices from now, and the battery plan (when to charge and discharge).
+
 ## [0.1.0] - 2026-11-08
 
 First release.

@@ -57,7 +57,7 @@ Not financial advice: results depend on your inputs, and tomorrow's plan assumes
 
 ## Other entities
 
-Spot, buy and sell price now and next interval; average, lowest and highest per day (spot enabled by default; buy/sell variants are available but disabled); *Prices today/tomorrow* with the full series in attributes; *Tomorrow's prices published*; *Cheap/Expensive price now* (threshold configurable); last download time.
+Spot, buy and sell price now and next interval; average, lowest and highest per day (spot enabled by default; buy/sell variants are available but disabled); *Upcoming prices* (every interval from now on, rolling) and *Prices today/tomorrow*, all with the full series in attributes; *Tomorrow's prices published*; *Cheap/Expensive price now* (threshold configurable); last download time.
 
 ## Services
 
@@ -78,7 +78,17 @@ stat_types: [mean, min, max]
 period: day
 ```
 
-For tomorrow's curve, the `prices` attribute of *Prices tomorrow* (`start`, `end`, `spot`, `buy`, `sell`) works with ApexCharts' `data_generator`.
+## Dashboards
+
+Ready-to-paste cards are in [`examples/dashboards/`](examples/dashboards) (they need [apexcharts-card](https://github.com/RomRider/apexcharts-card) from HACS):
+
+| File | Shows |
+|---|---|
+| `today.yaml` | Today's spot price as columns coloured by level, plus your buy price |
+| `upcoming.yaml` | Every price from now on (today and tomorrow), spot, buy and sell |
+| `battery-plan.yaml` | When the planner charges and discharges, over your buy price |
+
+Paste the YAML into a card's code editor. The `prices` attributes (`start`, `end`, `spot`, `buy`, `sell`) also work with any other chart card or a template.
 
 ## When are prices fetched?
 
