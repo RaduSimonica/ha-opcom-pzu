@@ -163,6 +163,9 @@
       "sell_maximum_tomorrow": {
         "name": "Maxim preț de vânzare mâine"
       },
+      "upcoming_prices": {
+        "name": "Prețuri următoare"
+      },
       "prices_today": {
         "name": "Prețuri azi"
       },

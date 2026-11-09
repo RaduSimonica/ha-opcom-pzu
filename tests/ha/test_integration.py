@@ -147,3 +147,24 @@ async def test_session_never_keeps_cookies(hass):
 
     session = create_session(hass)
     assert isinstance(session.cookie_jar, aiohttp.DummyCookieJar)
+
+
+async def test_upcoming_prices_roll_forward(hass, entry, aioclient_mock, freezer):
+    freezer.move_to("2026-11-09 12:00:00+02:00")  # 11:00 CET = interval 45 of 96
+    publish(aioclient_mock, date(2026, 11, 8), date(2026, 11, 9), empty=(date(2026, 11, 10),))
+    await setup(hass, entry)
+    state = hass.states.get("sensor.opcom_pzu_upcoming_prices")
+    rows = state.attributes["prices"]
+    assert int(state.state) == len(rows) == 52  # 11:00 CET to the end of the delivery day
+    assert rows[0]["start"].startswith("2026-11-09T12:00:00+02:00")  # the current interval first
+    assert rows[-1]["end"].startswith("2026-11-10T01:00:00+02:00")  # delivery day ends 01:00 local
+    assert {"spot", "buy", "sell"} <= rows[0].keys()
+    spot = float(hass.states.get("sensor.opcom_pzu_spot_price").state)
+    assert rows[0]["spot"] == pytest.approx(spot, abs=1e-4)
+
+    # Time passes: the list drops the interval that is over.
+    freezer.move_to("2026-11-09 12:15:03+02:00")
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done()
+    rows = hass.states.get("sensor.opcom_pzu_upcoming_prices").attributes["prices"]
+    assert len(rows) == 51 and rows[0]["start"].startswith("2026-11-09T12:15:00+02:00")

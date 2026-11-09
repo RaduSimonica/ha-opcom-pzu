@@ -163,6 +163,9 @@
       "sell_maximum_tomorrow": {
         "name": "Highest sell price tomorrow"
       },
+      "upcoming_prices": {
+        "name": "Upcoming prices"
+      },
       "prices_today": {
         "name": "Prices today"
       },

@@ -1,0 +1,61 @@
+# When the battery planner wants to charge and discharge, over your buy and
+# sell prices. Bars show the average price paid (charge) or received
+# (discharge) in each planned interval. Covers the rest of today and tomorrow
+# once published. Needs apexcharts-card (HACS -> Frontend).
+# If the plan is empty, the planner found no profitable cycle for your
+# settings (see the "Battery arbitrage profitable" sensors).
+type: custom:apexcharts-card
+header:
+  show: true
+  title: Battery plan
+graph_span: 24h
+span:
+  start: minute
+now:
+  show: true
+  label: Now
+  color: "#e74c3c"
+series:
+  - entity: sensor.opcom_pzu_upcoming_prices
+    name: Buy price
+    type: line
+    curve: stepline
+    color: "#ff4757"
+    stroke_width: 2
+    float_precision: 4
+    show:
+      in_header: false
+    data_generator: |
+      return (entity.attributes.prices || []).map(p => [new Date(p.start).getTime(), p.buy]);
+  - entity: sensor.opcom_pzu_battery_net_gain_today
+    name: Charge
+    type: column
+    color: "#2ed573"
+    float_precision: 4
+    show:
+      in_header: false
+    data_generator: |
+      const rows = [];
+      for (const id of ['sensor.opcom_pzu_battery_net_gain_today', 'sensor.opcom_pzu_battery_net_gain_tomorrow']) {
+        for (const b of (hass.states[id]?.attributes?.schedule || [])) {
+          if (b.action !== 'charge') continue;
+          for (let t = new Date(b.from).getTime(); t < new Date(b.to).getTime(); t += 900000) rows.push([t, b.avg_price]);
+        }
+      }
+      return rows.sort((a, b) => a[0] - b[0]);
+  - entity: sensor.opcom_pzu_battery_net_gain_today
+    name: Discharge
+    type: column
+    color: "#9b59b6"
+    float_precision: 4
+    show:
+      in_header: false
+    data_generator: |
+      const rows = [];
+      for (const id of ['sensor.opcom_pzu_battery_net_gain_today', 'sensor.opcom_pzu_battery_net_gain_tomorrow']) {
+        for (const b of (hass.states[id]?.attributes?.schedule || [])) {
+          if (b.action !== 'discharge') continue;
+          for (let t = new Date(b.from).getTime(); t < new Date(b.to).getTime(); t += 900000) rows.push([t, b.avg_price]);
+        }
+      }
+      return rows.sort((a, b) => a[0] - b[0]);
