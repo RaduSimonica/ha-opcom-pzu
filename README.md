@@ -12,6 +12,8 @@ Romanian day-ahead (PZU) electricity prices in Home Assistant: free, no account,
 
 HACS → Custom repositories → add this repository as *Integration* → install → restart. HACS shows the released version (see the [changelog](CHANGELOG.md)). Then *Settings → Devices & services → Add integration → OPCOM PZU*.
 
+**Snapshots:** new things first appear as pre-releases (`vX.Y.Z-snapshot.N`). To try them, open the repository in HACS, menu → *Show beta versions*, then update. Stable releases are published once in a while from the snapshots that proved fine.
+
 ## Setup
 
 You choose a currency (RON or EUR; fixed afterwards) and how many months of history to download.
