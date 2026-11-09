@@ -2,6 +2,11 @@
 # published it (around 13:45). One entity, so the chart follows the clock.
 # Needs apexcharts-card (HACS -> Frontend). Change graph_span (e.g. 36h, 48h)
 # to see more of tomorrow.
+# ENTITY IDS: these use the default ids (sensor.opcom_pzu_...). Home Assistant
+# prefixes the area of the device to entities created while it sits in an
+# area (e.g. sensor.server_opcom_pzu_upcoming_prices). If a series says
+# "Entity not available", look up the real id under Settings -> Devices &
+# services -> OPCOM PZU and replace it in the card.
 type: custom:apexcharts-card
 header:
   show: true

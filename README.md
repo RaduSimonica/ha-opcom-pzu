@@ -88,7 +88,7 @@ Ready-to-paste cards are in [`examples/dashboards/`](examples/dashboards) (they 
 | `upcoming.yaml` | Every price from now on (today and tomorrow), spot, buy and sell |
 | `battery-plan.yaml` | When the planner charges and discharges, over your buy price |
 
-Paste the YAML into a card's code editor. The `prices` attributes (`start`, `end`, `spot`, `buy`, `sell`) also work with any other chart card or a template.
+Paste the YAML into a card's code editor. **Entity IDs:** the cards use `sensor.opcom_pzu_...`, but Home Assistant adds the device's area to the ID of entities created while the device is in an area (e.g. `sensor.server_opcom_pzu_upcoming_prices`). If a card says *Entity not available*, copy the real ID from *Settings → Devices & services → OPCOM PZU*. The `prices` attributes (`start`, `end`, `spot`, `buy`, `sell`) also work with any other chart card or a template.
 
 ## When are prices fetched?
 
