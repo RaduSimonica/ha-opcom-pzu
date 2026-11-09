@@ -61,7 +61,7 @@ class Series:
         return self.at(cur.end) if cur else None
 
     def window(self, start: datetime, end: datetime) -> list[Point]:
-        lo = bisect_right(self._starts, start - timedelta(seconds=1))
+        lo = max(0, bisect_right(self._starts, start) - 1)
         return [p for p in self.points[lo:] if p.start < end and p.end > start]
 
     def covers(self, start: datetime, end: datetime) -> list[Point] | None:

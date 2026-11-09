@@ -24,7 +24,7 @@ from homeassistant.const import EVENT_LOGBOOK_ENTRY
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
-from .api import DayPrices, OpcomClient, OpcomError, OpcomParseError
+from .api import DayPrices, OpcomClient, OpcomError, OpcomHTTPError, OpcomParseError
 from .const import BACKFILL_DELAY, DOMAIN, NAME
 from .store import PriceStore
 
@@ -41,6 +41,8 @@ STATISTIC_ID = f"{DOMAIN}:spot_price"
 OLDEST_DAY = date(2015, 1, 1)
 SAVE_EVERY = 30  # days downloaded between saves/imports
 RETRIES = 3
+MAX_SKIPPED_IN_A_ROW = 5  # HTTP errors on this many days in a row mean OPCOM is down
+_SKIP = object()  # a day to try again on the next run, not to mark as missing
 
 
 def import_statistics(
@@ -161,13 +163,27 @@ class Backfill:
 
         milestones = {25, 50, 75}
         batch: list[DayPrices] = []
+        skipped = 0
         for day in todo:
             data = await self._fetch(day)
-            if data is None:
-                self._store.mark_missing(day)
+            if data is _SKIP:
+                skipped += 1
+                if skipped >= MAX_SKIPPED_IN_A_ROW:
+                    self._set("paused")
+                    self._log(
+                        f"History download paused at {day}: OPCOM keeps answering with "
+                        "errors. Progress is saved; it continues on the next Home "
+                        "Assistant start or when you call opcom_pzu.backfill_history."
+                    )
+                    await self._flush(batch)
+                    raise _Paused
             else:
-                self._store.put(data)
-                batch.append(data)
+                skipped = 0
+                if data is None:
+                    self._store.mark_missing(day)
+                else:
+                    self._store.put(data)
+                    batch.append(data)
             self.done += 1
             self._set("downloading")
             if len(batch) >= SAVE_EVERY:
@@ -203,7 +219,7 @@ class Backfill:
         if batch:
             import_statistics(self._hass, self._currency, batch)
 
-    async def _fetch(self, day: date) -> DayPrices | None:
+    async def _fetch(self, day: date) -> DayPrices | None | object:
         for attempt in range(1, RETRIES + 1):
             try:
                 return await self._client.fetch_day(day)
@@ -211,6 +227,12 @@ class Backfill:
                 # A broken file will not fix itself: skip the day, keep going.
                 self._log(f"Skipped {day}: OPCOM's file for that day is unusable ({err}).")
                 return None
+            except OpcomHTTPError as err:
+                if attempt == RETRIES:
+                    # One broken day must not block all the others.
+                    self._log(f"Skipped {day} for now: {err}. It is retried on the next run.")
+                    return _SKIP
+                await asyncio.sleep(5 * attempt)
             except OpcomError as err:
                 if attempt == RETRIES:
                     self._set("paused")

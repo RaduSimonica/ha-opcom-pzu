@@ -33,6 +33,8 @@ def _rank(c: PzuCoordinator, cheap: bool, percentile: int) -> bool | None:
     if not pts or not now:
         return None
     prices = sorted(c.buy(p) for p in pts)
+    if prices[0] == prices[-1]:
+        return False  # a flat day has no cheap or expensive hours
     idx = max(0, round(len(prices) * percentile / 100) - 1)
     current = c.buy(now)
     return current <= prices[idx] if cheap else current >= prices[-1 - idx]
@@ -45,14 +47,6 @@ DESCRIPTIONS = (
     ),
     PzuBinaryDescription(key="cheap_now", value_fn=lambda c, p: _rank(c, True, p)),
     PzuBinaryDescription(key="expensive_now", value_fn=lambda c, p: _rank(c, False, p)),
-    PzuBinaryDescription(
-        key="battery_profitable_today",
-        value_fn=lambda c, _p: (pl.profitable if (pl := c.plans.get(0)) else None),
-    ),
-    PzuBinaryDescription(
-        key="battery_profitable_tomorrow",
-        value_fn=lambda c, _p: (pl.profitable if (pl := c.plans.get(1)) else None),
-    ),
 )
 
 

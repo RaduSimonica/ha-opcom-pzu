@@ -55,3 +55,23 @@ async def test_options_flow_validates_formula(hass, entry, aioclient_mock, freez
     assert done["type"] is FlowResultType.CREATE_ENTRY
     await hass.async_block_till_done()  # the reload triggered by new options
     assert entry.options["sell_formula"] == "pzu*0.9"
+
+
+async def test_emptied_fields_are_reset(hass, entry, aioclient_mock, freezer):
+    """The frontend leaves an emptied optional field out of the submission."""
+    freezer.move_to("2026-11-09 12:00:00+02:00")
+    publish(aioclient_mock, date(2026, 11, 8), date(2026, 11, 9))
+    hass.config_entries.async_update_entry(
+        entry, options={"sell_formula": "pzu*0.9", "sell_fixed_fee": 0.2}
+    )
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    flow = await hass.config_entries.options.async_init(entry.entry_id)
+    flow = await hass.config_entries.options.async_configure(flow["flow_id"], {"next_step_id": "sell"})
+    ok = await hass.config_entries.options.async_configure(flow["flow_id"], {"sell_commission_pct": 5})
+    done = await hass.config_entries.options.async_configure(ok["flow_id"], {"next_step_id": "finish"})
+    assert done["type"] is FlowResultType.CREATE_ENTRY
+    await hass.async_block_till_done()
+    assert entry.options["sell_formula"] == "" and entry.options["sell_fixed_fee"] == 0.0
+    assert entry.options["sell_commission_pct"] == 5

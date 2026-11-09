@@ -29,7 +29,6 @@
         "menu_options": {
           "buy": "Buy price (what you pay)",
           "sell": "Sell price (what you receive)",
-          "battery": "Battery",
           "general": "History and cheap-price threshold",
           "finish": "Save and close"
         }
@@ -51,27 +50,6 @@
           "buy_fixed_charges": "Fixed charges per kWh (before VAT)",
           "buy_vat_pct": "VAT",
           "buy_formula": "Advanced formula (optional)"
-        }
-      },
-      "battery": {
-        "title": "Battery",
-        "description": "Used to plan when buying cheap and selling dear pays off, using your buy and sell prices.\n\nA kWh sold must have been bought for less than: *sell price − degradation cost*, multiplied by the efficiency.\n\n**Your real battery (optional):** pick a state-of-charge sensor (%, Wh or kWh) so today's plan starts from what is actually stored, and optionally a capacity sensor (Wh or kWh) to replace the fixed capacity below. Without them the plan assumes an empty battery.",
-        "data": {
-          "battery_capacity_kwh": "Usable capacity",
-          "battery_charge_power_kw": "Maximum charge power",
-          "battery_discharge_power_kw": "Maximum discharge power",
-          "battery_round_trip_efficiency_pct": "Round-trip efficiency",
-          "battery_degradation_per_kwh": "Degradation cost per kWh",
-          "battery_soc_entity": "State of charge sensor (optional)",
-          "battery_capacity_entity": "Capacity sensor (optional)"
-        },
-        "data_description": {
-          "battery_charge_power_kw": "Most power the battery can draw from the grid, in kW at the grid side. 300 W = 0.3 kW.",
-          "battery_discharge_power_kw": "Most power it can deliver to the grid, in kW. 1200 W = 1.2 kW. Charging and discharging limits are often different.",
-          "battery_round_trip_efficiency_pct": "Share of grid energy that comes back out: buy → store → sell. 85-95% is typical for lithium batteries.",
-          "battery_degradation_per_kwh": "Battery wear per kWh delivered, in {currency}. Roughly battery price per kWh ÷ lifetime cycles (e.g. 1500 ÷ 6000 = 0.25).",
-          "battery_soc_entity": "Percent, Wh or kWh. Used for today's plan.",
-          "battery_capacity_entity": "Usable capacity in Wh or kWh. Replaces the fixed capacity."
         }
       },
       "general": {
@@ -172,26 +150,6 @@
       "prices_tomorrow": {
         "name": "Prices tomorrow"
       },
-      "battery_gain_today": {
-        "name": "Battery net gain today"
-      },
-      "battery_gain_tomorrow": {
-        "name": "Battery net gain tomorrow"
-      },
-      "battery_gain_per_kwh_today": {
-        "name": "Battery net gain per kWh today"
-      },
-      "battery_gain_per_kwh_tomorrow": {
-        "name": "Battery net gain per kWh tomorrow"
-      },
-      "battery_action": {
-        "name": "Battery action",
-        "state": {
-          "charge": "Charge",
-          "discharge": "Discharge",
-          "idle": "Idle"
-        }
-      },
       "last_fetch": {
         "name": "Last price download"
       },
@@ -208,12 +166,6 @@
       },
       "expensive_now": {
         "name": "Expensive price now"
-      },
-      "battery_profitable_today": {
-        "name": "Battery arbitrage profitable today"
-      },
-      "battery_profitable_tomorrow": {
-        "name": "Battery arbitrage profitable tomorrow"
       }
     }
   },

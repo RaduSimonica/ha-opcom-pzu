@@ -4,9 +4,8 @@ from __future__ import annotations
 
 import logging
 import random
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
-from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
@@ -19,10 +18,7 @@ from homeassistant.util import dt as dt_util
 
 from . import settings
 from .api import MARKET_TZ, DayPrices, OpcomClient, OpcomError
-from .arbitrage import BatteryParams, Plan, Slot, plan
 from .const import (
-    CONF_BATTERY_CAPACITY_ENTITY,
-    CONF_BATTERY_SOC_ENTITY,
     CONF_CURRENCY,
     DOMAIN,
     FIRST_FETCH,
@@ -60,9 +56,6 @@ class PzuCoordinator(DataUpdateCoordinator[PzuData]):
         self.store = store
         self.currency: str = entry.data[CONF_CURRENCY]
         self.tariff: CompiledTariff = settings.tariff(entry.options).compile()
-        self.battery: BatteryParams = settings.battery(entry.options)
-        self.plans: dict[int, Plan] = {}  # by day offset from the local today
-        self.plan_info: dict[int, dict[str, Any]] = {}  # what each plan assumed
         self.last_fetch: datetime | None = None
         self._retry_at: dict[date, datetime] = {}
         self._jitter = timedelta(seconds=random.randint(0, JITTER_SECONDS))
@@ -74,20 +67,29 @@ class PzuCoordinator(DataUpdateCoordinator[PzuData]):
     async def async_start(self) -> None:
         """Load the cache, fetch what is missing and start the clock ticks."""
         await self.store.async_load()
+        self.last_fetch = self.store.last_fetch
+        # Registered first, so a failed first refresh does not leave a timer behind.
+        self.config_entry.async_on_unload(self._cancel_timer)
         await self.async_config_entry_first_refresh()
         self.config_entry.async_on_unload(
             async_track_utc_time_change(
                 self.hass, self._tick, minute=(0, 15, 30, 45), second=2
             )
         )
-        self.config_entry.async_on_unload(self._cancel_timer)
 
     @callback
     def _tick(self, _now: datetime) -> None:
         if dt_util.now().date() != self._built_for:
             self.hass.async_create_task(self.async_refresh())  # day rolled over
         else:
-            self.hass.async_create_task(self._async_replan())  # battery level moves
+            self._import_recent()  # keep the long-term statistics current
+            self.async_update_listeners()  # the current interval moved on
+
+    def _import_recent(self) -> None:
+        """Long-term statistics for the hours that have passed (idempotent)."""
+        days = [d for day in self._wanted_days() if (d := self.store.get(day))]
+        if days:
+            import_statistics(self.hass, self.currency, days)
 
     def _cancel_timer(self) -> None:
         if self._timer:
@@ -133,10 +135,10 @@ class PzuCoordinator(DataUpdateCoordinator[PzuData]):
                 self.store.put(prices)
                 fetched.append(prices)
                 self._retry_at.pop(day, None)
-                self.last_fetch = now
+                self.last_fetch = self.store.last_fetch = now
             if fetched:
                 await self.store.async_save()
-                import_statistics(self.hass, self.currency, fetched)
+            self._import_recent()
 
             series = Series(
                 d for day in self._wanted_days() if (d := self.store.get(day))
@@ -145,8 +147,6 @@ class PzuCoordinator(DataUpdateCoordinator[PzuData]):
                 raise UpdateFailed("No prices available for the current interval")
             self._built_for = dt_util.now().date()
             data = PzuData(series, self.last_fetch)
-            self.data = data  # plans below read it
-            await self._async_replan(notify=False)
             return data
         finally:
             self._schedule_next()
@@ -186,73 +186,3 @@ class PzuCoordinator(DataUpdateCoordinator[PzuData]):
 
     def sell(self, point: Point) -> float:
         return self.tariff.sell_price(point.pzu, dt_util.as_local(point.start).hour)
-
-    def _read_number(self, entity_id: str | None) -> tuple[float, str | None] | None:
-        """Numeric state of a user-provided sensor, with its unit, if usable."""
-        if not entity_id or (state := self.hass.states.get(entity_id)) is None:
-            return None
-        try:
-            return float(state.state), state.attributes.get("unit_of_measurement")
-        except ValueError:
-            return None  # unknown / unavailable
-
-    def _battery_inputs(self) -> tuple[BatteryParams, float, str]:
-        """Battery parameters and the energy it holds now, from the user's sensors.
-
-        Falls back to the configured capacity and an empty battery when a sensor
-        is not set or not available.
-        """
-        opts = self.config_entry.options
-        params = self.battery
-        capacity = self._read_number(opts.get(CONF_BATTERY_CAPACITY_ENTITY))
-        if capacity and capacity[0] > 0:
-            kwh = capacity[0] / 1000 if capacity[1] == "Wh" else capacity[0]
-            params = replace(params, capacity_kwh=kwh)
-        soc = self._read_number(opts.get(CONF_BATTERY_SOC_ENTITY))
-        if not soc:
-            return params, 0.0, "assumed empty"
-        value, unit = soc
-        if unit == "kWh":
-            energy = value
-        elif unit == "Wh":
-            energy = value / 1000
-        else:  # percent
-            energy = min(max(value, 0.0), 100.0) / 100 * params.capacity_kwh
-        return params, min(max(energy, 0.0), params.capacity_kwh), "sensor"
-
-    async def _async_replan(self, notify: bool = True) -> None:
-        if self.data is None:
-            return
-        params, energy, source = self._battery_inputs()
-        now = datetime.now(timezone.utc)
-        series = self.data.series
-        self.plans, self.plan_info = await self.hass.async_add_executor_job(
-            self._build_plans, series, params, energy, source, now
-        )
-        if notify:
-            self.async_update_listeners()
-
-    def _build_plans(
-        self, series: Series, params: BatteryParams, energy: float, source: str, now: datetime
-    ) -> tuple[dict[int, Plan], dict[int, dict[str, Any]]]:
-        """Today: the remaining intervals, starting from the real battery level.
-        Tomorrow: a full day, battery assumed empty (its level then is unknown).
-        """
-        plans: dict[int, Plan] = {}
-        info: dict[int, dict[str, Any]] = {}
-        for offset in (0, 1):
-            points = self.local_points(offset, series)
-            if offset == 0:
-                points = [p for p in points or [] if p.end > now]
-            if not points:
-                continue
-            slots = [Slot(p.start, self.buy(p), self.sell(p)) for p in points]
-            hours = (points[0].end - points[0].start).total_seconds() / 3600
-            start_energy = energy if offset == 0 else 0.0
-            plans[offset] = plan(slots, hours, params, start_energy)
-            info[offset] = {
-                "capacity_kwh": round(params.capacity_kwh, 2),
-                "starting_energy_kwh": round(start_energy, 2),
-                "starting_energy": source if offset == 0 else "assumed empty",
-            }
-        return plans, info
