@@ -8,8 +8,6 @@ import voluptuous as vol
 from homeassistant.config_entries import ConfigFlow, ConfigFlowResult, OptionsFlow
 from homeassistant.core import callback
 from homeassistant.helpers.selector import (
-    EntitySelector,
-    EntitySelectorConfig,
     NumberSelector,
     NumberSelectorConfig,
     NumberSelectorMode,
@@ -22,13 +20,6 @@ from homeassistant.util import dt as dt_util
 from . import settings
 from .api import OpcomClient, OpcomError
 from .const import (
-    CONF_BATTERY_CAPACITY,
-    CONF_BATTERY_CAPACITY_ENTITY,
-    CONF_BATTERY_CHARGE_POWER,
-    CONF_BATTERY_DEGRADATION,
-    CONF_BATTERY_DISCHARGE_POWER,
-    CONF_BATTERY_EFFICIENCY,
-    CONF_BATTERY_SOC_ENTITY,
     CONF_BUY_FIXED_CHARGES,
     CONF_BUY_FORMULA,
     CONF_BUY_MARKUP,
@@ -59,7 +50,6 @@ def _num(minimum: float, maximum: float, step: float, unit: str | None = None) -
 
 
 _TEXT = TextSelector()
-_SENSOR = EntitySelector(EntitySelectorConfig(domain=["sensor", "number", "input_number"]))
 
 
 def _months_selector() -> NumberSelector:
@@ -116,7 +106,7 @@ class OpcomPzuOptionsFlow(OptionsFlow):
             self._options = dict(self.config_entry.options)
         return self.async_show_menu(
             step_id="init",
-            menu_options=["buy", "sell", "battery", "general", "finish"],
+            menu_options=["buy", "sell", "general", "finish"],
         )
 
     async def async_step_finish(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
@@ -195,24 +185,6 @@ class OpcomPzuOptionsFlow(OptionsFlow):
             vol.Optional(CONF_BUY_FORMULA): _TEXT,
         }
         return await self._tariff_step("buy", schema, CONF_BUY_FORMULA, user_input)
-
-    async def async_step_battery(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
-        schema = {
-            vol.Required(CONF_BATTERY_CAPACITY): _num(0.1, 10000, 0.1, "kWh"),
-            vol.Required(CONF_BATTERY_CHARGE_POWER): _num(0.01, 10000, 0.01, "kW"),
-            vol.Required(CONF_BATTERY_DISCHARGE_POWER): _num(0.01, 10000, 0.01, "kW"),
-            vol.Required(CONF_BATTERY_EFFICIENCY): _num(1, 100, 0.5, "%"),
-            vol.Required(CONF_BATTERY_DEGRADATION): _num(0, 100, 0.001),
-            vol.Optional(CONF_BATTERY_SOC_ENTITY): _SENSOR,
-            vol.Optional(CONF_BATTERY_CAPACITY_ENTITY): _SENSOR,
-        }
-        if user_input is not None:
-            self._options |= user_input
-            for key in (CONF_BATTERY_SOC_ENTITY, CONF_BATTERY_CAPACITY_ENTITY):
-                if key not in user_input:  # left empty = cleared
-                    self._options.pop(key, None)
-            return await self.async_step_init()
-        return self._form("battery", schema)
 
     async def async_step_general(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         schema = {

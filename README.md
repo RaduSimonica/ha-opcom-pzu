@@ -3,7 +3,7 @@
 Romanian day-ahead (PZU) electricity prices in Home Assistant: free, no account, no licence.
 
 - **Real prices, not just spot:** set what you actually *pay* and *receive* (commission, taxes, VAT, or your own formula).
-- **Battery arbitrage planner:** is it worth buying cheap and selling dear? Accounts for round-trip efficiency, battery degradation, capacity and power. Shows the net gain and the gain per kWh.
+- **Feeds a battery planner:** the *Upcoming prices* sensor follows an open [price series format](docs/price-series.md), so [Battery Planner](https://github.com/RaduSimonica/battery-planner) can plan when to charge and discharge your battery from your own buy and sell prices.
 - **Full history** as native Home Assistant statistics, back to 2015 if you want, plus a service to pull any date range.
 - **Tomorrow's prices** as soon as OPCOM publishes them (about 13:45 Romanian time), with a full series for charts.
 - Correct **CET market time** and **DST days** (92 / 100 intervals), 15-minute resolution (older days are hourly).
@@ -29,35 +29,15 @@ You choose a currency (RON or EUR; fixed afterwards) and how many months of hist
 
 Formulas are plain arithmetic over `pzu` (spot, currency/kWh) and `hour` (local hour, for time-of-use tariffs), with `+ - * / ** %`, `min`, `max`, `abs`, `round`, `floor`, `ceil`. Nothing else runs, and mistakes are caught when you save.
 
-## Battery planner
+## Battery planning
 
-*Configure → Battery:* usable capacity, **maximum charge power and maximum discharge power** (they are often different, e.g. 0.3 kW in and 1.2 kW out), round-trip efficiency, degradation cost per kWh delivered. Optionally pick your own sensors:
+Planning when to charge and discharge a battery is done by the separate [**Battery Planner**](https://github.com/RaduSimonica/battery-planner) integration, which works with any price source. Install it, and when it asks for the price source pick this integration's *Upcoming prices* sensor. It uses the buy and sell prices you set above.
 
-- **State of charge** (%, Wh or kWh): today's plan then starts from the energy actually in the battery and covers the remaining intervals. It is re-planned every 15 minutes.
-- **Capacity** (Wh or kWh): replaces the fixed capacity, e.g. when your inverter reports usable capacity.
-
-Without a state-of-charge sensor the plan assumes an empty battery. Tomorrow's plan always assumes an empty battery at midnight, as nobody knows the level by then.
-
-For one kWh bought at `b` and sold later at `s`:
-
-```
-net gain per kWh sold = s − degradation − b / efficiency
-```
-
-It is only worth cycling when that is positive. The planner finds the best schedule for the rest of the day (several cycles allowed, capacity and power respected), using *your* buy and sell prices. Energy already stored counts as free, since its cost is sunk.
-
-| Entity | Meaning |
-|---|---|
-| Battery net gain today / tomorrow | Planned profit (today: remaining intervals); attributes hold the schedule (charge/discharge windows), energy bought and sold, cycles and the break-even sell price |
-| Battery net gain per kWh today / tomorrow | Net gain per kWh sold |
-| Battery action | `charge` / `discharge` / `idle` right now, for automations |
-| Battery arbitrage profitable today / tomorrow | Binary sensors |
-
-Not financial advice: results depend on your inputs, and tomorrow's plan assumes an empty battery.
+**Coming from 0.2.x?** The battery sensors and settings used to live here. 0.3.0 removes them (the old battery entities and options are cleaned up automatically), so install Battery Planner and enter your battery settings there. Its entities are named `sensor.battery_planner_...`.
 
 ## Other entities
 
-Spot, buy and sell price now and next interval; average, lowest and highest per day (spot enabled by default; buy/sell variants are available but disabled); *Upcoming prices* (every interval from now on, rolling) and *Prices today/tomorrow*, all with the full series in attributes; *Tomorrow's prices published*; *Cheap/Expensive price now* (threshold configurable); last download time.
+Spot, buy and sell price now and next interval; average, lowest and highest per day (spot enabled by default; buy/sell variants are available but disabled); *Upcoming prices* (every interval from now on, rolling, in the [price series format](docs/price-series.md)) and *Prices today/tomorrow*, all with the full series in attributes; *Tomorrow's prices published*; *Cheap/Expensive price now* (threshold configurable); last download time.
 
 ## Services
 
@@ -86,7 +66,6 @@ Ready-to-paste cards are in [`examples/dashboards/`](examples/dashboards) (they 
 |---|---|
 | `today.yaml` | Today's spot price as columns coloured by level, plus your buy price |
 | `upcoming.yaml` | Every price from now on (today and tomorrow), spot, buy and sell |
-| `battery-plan.yaml` | When the planner charges and discharges, over your buy price |
 
 Paste the YAML into a card's code editor. **Entity IDs:** the cards use `sensor.opcom_pzu_...`, but Home Assistant adds the device's area to the ID of entities created while the device is in an area (e.g. `sensor.server_opcom_pzu_upcoming_prices`). If a card says *Entity not available*, copy the real ID from *Settings → Devices & services → OPCOM PZU*. The `prices` attributes (`start`, `end`, `spot`, `buy`, `sell`) also work with any other chart card or a template.
 

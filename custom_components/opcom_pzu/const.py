@@ -17,16 +17,6 @@ CONF_BUY_FIXED_CHARGES = "buy_fixed_charges"
 CONF_BUY_VAT = "buy_vat_pct"
 CONF_BUY_FORMULA = "buy_formula"
 
-# Battery (options)
-CONF_BATTERY_CAPACITY = "battery_capacity_kwh"
-CONF_BATTERY_POWER = "battery_power_kw"  # pre-0.1.0 single limit, still honoured
-CONF_BATTERY_CHARGE_POWER = "battery_charge_power_kw"
-CONF_BATTERY_DISCHARGE_POWER = "battery_discharge_power_kw"
-CONF_BATTERY_EFFICIENCY = "battery_round_trip_efficiency_pct"
-CONF_BATTERY_DEGRADATION = "battery_degradation_per_kwh"
-CONF_BATTERY_SOC_ENTITY = "battery_soc_entity"  # optional: live state of charge
-CONF_BATTERY_CAPACITY_ENTITY = "battery_capacity_entity"  # optional: live usable capacity
-
 CONF_CHEAP_PERCENTILE = "cheap_percentile"
 
 CURRENCIES = {"RON": "ro", "EUR": "en"}  # currency -> OPCOM language

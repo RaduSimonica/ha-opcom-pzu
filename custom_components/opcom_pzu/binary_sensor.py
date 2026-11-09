@@ -47,14 +47,6 @@ DESCRIPTIONS = (
     ),
     PzuBinaryDescription(key="cheap_now", value_fn=lambda c, p: _rank(c, True, p)),
     PzuBinaryDescription(key="expensive_now", value_fn=lambda c, p: _rank(c, False, p)),
-    PzuBinaryDescription(
-        key="battery_profitable_today",
-        value_fn=lambda c, _p: (pl.profitable if (pl := c.plans.get(0)) else None),
-    ),
-    PzuBinaryDescription(
-        key="battery_profitable_tomorrow",
-        value_fn=lambda c, _p: (pl.profitable if (pl := c.plans.get(1)) else None),
-    ),
 )
 
 

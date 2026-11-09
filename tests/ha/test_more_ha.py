@@ -1,4 +1,4 @@
-"""More Home Assistant level tests: client, store, services, setup failures, battery inputs."""
+"""More Home Assistant level tests: client, store, services, setup failures."""
 
 import asyncio
 from datetime import date, timedelta
@@ -251,82 +251,6 @@ async def test_backfill_does_not_run_twice_at_once(hass, entry, aioclient_mock, 
     b.running = False
 
 
-# -- battery inputs ------------------------------------------------------------
-
-
-@pytest.mark.parametrize(
-    "soc, unit, expected",
-    [("4.5", "kWh", 4.5), ("4500", "Wh", 4.5), ("50", "%", 5.0), ("150", "%", 10.0), ("-5", "%", 0.0), ("99", "kWh", 10.0)],
-)
-async def test_soc_units_and_clamping(hass, entry, aioclient_mock, freezer, soc, unit, expected):
-    freezer.move_to("2026-11-09 12:00:00+02:00")
-    publish(aioclient_mock, date(2026, 11, 8), DAY)
-    hass.states.async_set("sensor.soc", soc, {"unit_of_measurement": unit})
-    hass.config_entries.async_update_entry(entry, options={"battery_soc_entity": "sensor.soc"})
-    await setup(hass, entry)
-    attrs = hass.states.get("sensor.opcom_pzu_battery_net_gain_today").attributes
-    assert attrs["starting_energy_kwh"] == pytest.approx(expected)
-
-
-@pytest.mark.parametrize("state", ["unavailable", "unknown", "abc"])
-async def test_unusable_sensors_fall_back_to_empty_battery(hass, entry, aioclient_mock, freezer, state):
-    freezer.move_to("2026-11-09 12:00:00+02:00")
-    publish(aioclient_mock, date(2026, 11, 8), DAY)
-    hass.states.async_set("sensor.soc", state, {"unit_of_measurement": "%"})
-    hass.states.async_set("sensor.cap", state, {"unit_of_measurement": "kWh"})
-    hass.config_entries.async_update_entry(
-        entry, options={"battery_soc_entity": "sensor.soc", "battery_capacity_entity": "sensor.cap"}
-    )
-    await setup(hass, entry)
-    attrs = hass.states.get("sensor.opcom_pzu_battery_net_gain_today").attributes
-    assert attrs["starting_energy"] == "assumed empty" and attrs["capacity_kwh"] == 10.0
-
-
-async def test_a_missing_soc_entity_is_ignored(hass, entry, aioclient_mock, freezer):
-    freezer.move_to("2026-11-09 12:00:00+02:00")
-    publish(aioclient_mock, date(2026, 11, 8), DAY)
-    hass.config_entries.async_update_entry(entry, options={"battery_soc_entity": "sensor.does_not_exist"})
-    await setup(hass, entry)
-    assert hass.states.get("sensor.opcom_pzu_battery_net_gain_today").attributes["starting_energy"] == "assumed empty"
-
-
-async def test_a_zero_capacity_sensor_is_ignored(hass, entry, aioclient_mock, freezer):
-    freezer.move_to("2026-11-09 12:00:00+02:00")
-    publish(aioclient_mock, date(2026, 11, 8), DAY)
-    hass.states.async_set("sensor.cap", "0", {"unit_of_measurement": "kWh"})
-    hass.config_entries.async_update_entry(entry, options={"battery_capacity_entity": "sensor.cap"})
-    await setup(hass, entry)
-    assert hass.states.get("sensor.opcom_pzu_battery_net_gain_today").attributes["capacity_kwh"] == 10.0
-
-
-async def test_plan_follows_the_battery_level_every_quarter_hour(hass, entry, aioclient_mock, freezer):
-    freezer.move_to("2026-11-09 12:00:30+02:00")
-    publish(aioclient_mock, date(2026, 11, 8), DAY)
-    hass.states.async_set("sensor.soc", "0", {"unit_of_measurement": "%"})
-    hass.config_entries.async_update_entry(entry, options={"battery_soc_entity": "sensor.soc"})
-    await setup(hass, entry)
-    empty = float(hass.states.get("sensor.opcom_pzu_battery_net_gain_today").state)
-    hass.states.async_set("sensor.soc", "100", {"unit_of_measurement": "%"})
-    freezer.move_to("2026-11-09 12:15:03+02:00")
-    async_fire_time_changed(hass)
-    await hass.async_block_till_done()
-    full = float(hass.states.get("sensor.opcom_pzu_battery_net_gain_today").state)
-    assert full > empty  # stored energy is free to sell
-
-
-async def test_battery_action_values(hass, entry, aioclient_mock, freezer):
-    freezer.move_to("2026-11-09 12:00:30+02:00")
-    publish(aioclient_mock, date(2026, 11, 8), DAY)
-    hass.states.async_set("sensor.soc", "100", {"unit_of_measurement": "%"})
-    hass.config_entries.async_update_entry(entry, options={"battery_soc_entity": "sensor.soc"})
-    await setup(hass, entry)
-    state = hass.states.get("sensor.opcom_pzu_battery_action")
-    assert state.state in ("charge", "discharge", "idle")
-    plan = hass.states.get("sensor.opcom_pzu_battery_net_gain_today")
-    for block in plan.attributes.get("schedule", []):
-        assert block["action"] in ("charge", "discharge") and block["to"] > block["from"]
-
-
 # -- binary sensors ------------------------------------------------------------
 
 
@@ -355,7 +279,6 @@ async def test_flat_day_is_neither_cheap_nor_expensive(hass, entry, aioclient_mo
     await setup(hass, entry)
     assert hass.states.get("binary_sensor.opcom_pzu_cheap_price_now").state == "off"
     assert hass.states.get("binary_sensor.opcom_pzu_expensive_price_now").state == "off"
-    assert hass.states.get("binary_sensor.opcom_pzu_battery_arbitrage_profitable_today").state == "off"
 
 
 async def test_cheap_percentile_is_configurable(hass, entry, aioclient_mock, freezer):
@@ -430,28 +353,6 @@ async def _finish(hass, flow):
     await hass.async_block_till_done()
 
 
-async def test_battery_page_saves_and_clears_sensors(hass, entry, aioclient_mock, freezer):
-    hass.config_entries.async_update_entry(
-        entry, options={"battery_soc_entity": "sensor.soc", "battery_capacity_entity": "sensor.cap"}
-    )
-    form = await _open(hass, entry, aioclient_mock, freezer, "battery")
-    assert form["type"] is FlowResultType.FORM
-    flow = await hass.config_entries.options.async_configure(
-        form["flow_id"],
-        {
-            "battery_capacity_kwh": 13.5,
-            "battery_charge_power_kw": 0.3,
-            "battery_discharge_power_kw": 1.2,
-            "battery_round_trip_efficiency_pct": 85,
-            "battery_degradation_per_kwh": 0.2,
-        },  # both sensor pickers left empty
-    )
-    await _finish(hass, flow)
-    assert "battery_soc_entity" not in entry.options and "battery_capacity_entity" not in entry.options
-    assert entry.options["battery_charge_power_kw"] == 0.3 and entry.options["battery_discharge_power_kw"] == 1.2
-    assert entry.runtime_data.coordinator.battery.max_discharge_kw == 1.2
-
-
 async def test_general_page_saves_integers(hass, entry, aioclient_mock, freezer):
     form = await _open(hass, entry, aioclient_mock, freezer, "general")
     flow = await hass.config_entries.options.async_configure(
@@ -499,3 +400,72 @@ async def test_second_entry_is_refused(hass, entry, aioclient_mock, freezer):
     await setup(hass, entry)
     result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": "user"})
     assert result["type"] is FlowResultType.ABORT
+
+
+# -- 0.3.0: the battery planner moved to Battery Planner ---------------------------
+
+
+async def test_old_battery_entities_and_options_are_removed(hass, entry, aioclient_mock, freezer):
+    from homeassistant.helpers import entity_registry as er
+
+    freezer.move_to("2026-11-09 12:00:00+02:00")
+    publish(aioclient_mock, date(2026, 11, 8), DAY, empty=(date(2026, 11, 10),))
+    registry = er.async_get(hass)
+    old = {
+        ("sensor", "battery_gain_today"), ("sensor", "battery_gain_tomorrow"),
+        ("sensor", "battery_gain_per_kwh_today"), ("sensor", "battery_gain_per_kwh_tomorrow"),
+        ("sensor", "battery_action"), ("binary_sensor", "battery_profitable_today"),
+        ("binary_sensor", "battery_profitable_tomorrow"),
+    }
+    for domain, key in old:
+        registry.async_get_or_create(domain, DOMAIN, f"{entry.entry_id}_{key}", config_entry=entry)
+    hass.config_entries.async_update_entry(
+        entry,
+        options={
+            "buy_vat_pct": 9.0, "cheap_percentile": 30,
+            "battery_capacity_kwh": 13.5, "battery_soc_entity": "sensor.soc",
+            "battery_charge_power_kw": 0.3, "battery_power_kw": 3.0,
+        },
+    )
+    await setup(hass, entry)
+
+    for domain, key in old:
+        assert registry.async_get_entity_id(domain, DOMAIN, f"{entry.entry_id}_{key}") is None
+    assert dict(entry.options) == {"buy_vat_pct": 9.0, "cheap_percentile": 30}  # price settings stay
+    # Prices keep working, and the price entities are untouched.
+    assert hass.states.get("sensor.opcom_pzu_spot_price").state not in ("unknown", "unavailable")
+    assert registry.async_get_entity_id("sensor", DOMAIN, f"{entry.entry_id}_upcoming_prices")
+
+
+async def test_no_battery_entities_are_created(hass, entry, aioclient_mock, freezer):
+    freezer.move_to("2026-11-09 12:00:00+02:00")
+    publish(aioclient_mock, date(2026, 11, 8), DAY, empty=(date(2026, 11, 10),))
+    await setup(hass, entry)
+    assert not [s for s in hass.states.async_all() if "battery" in s.entity_id]
+
+
+async def test_options_menu_has_no_battery_page(hass, entry, aioclient_mock, freezer):
+    freezer.move_to("2026-11-09 12:00:00+02:00")
+    publish(aioclient_mock, date(2026, 11, 8), DAY, empty=(date(2026, 11, 10),))
+    await setup(hass, entry)
+    flow = await hass.config_entries.options.async_init(entry.entry_id)
+    assert flow["menu_options"] == ["buy", "sell", "general", "finish"]
+
+
+async def test_the_series_follows_the_price_series_contract(hass, entry, aioclient_mock, freezer):
+    """Battery Planner reads this sensor: its shape is a promise (docs/price-series.md)."""
+    from datetime import datetime
+
+    freezer.move_to("2026-11-09 12:00:00+02:00")
+    publish(aioclient_mock, date(2026, 11, 8), DAY, date(2026, 11, 10))
+    await setup(hass, entry)
+    state = hass.states.get("sensor.opcom_pzu_upcoming_prices")
+    assert state.attributes["unit"] == "RON/kWh"
+    previous_end = None
+    for row in state.attributes["prices"]:
+        start, end = datetime.fromisoformat(row["start"]), datetime.fromisoformat(row["end"])
+        assert start.utcoffset() is not None and end.utcoffset() is not None  # an offset on every time
+        assert end - start == timedelta(minutes=15)
+        assert isinstance(row["buy"], float) and isinstance(row["sell"], float)
+        assert previous_end in (None, start)  # contiguous, oldest first
+        previous_end = end

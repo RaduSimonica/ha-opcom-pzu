@@ -6,6 +6,14 @@ publishes a GitHub release with this section as its notes, which is what HACS
 shows as the version. Versions follow [semantic versioning](https://semver.org):
 `0.x.0` for new features, `0.x.y` for fixes.
 
+## [0.3.0] - 2026-11-09
+
+### Changed (breaking)
+- **The battery planner moved to its own integration, [Battery Planner](https://github.com/RaduSimonica/battery-planner).** OPCOM PZU now only handles prices. The battery sensors (net gain, gain per kWh, action, profitable today/tomorrow), the *Battery* settings page and the battery example card are gone from here. The old battery entities and settings are removed automatically on update. To keep planning your battery, install Battery Planner (0.1.0 or later), pick this integration's *Upcoming prices* sensor as its price source, and enter your battery settings there. Entity names change to `sensor.battery_planner_...`.
+
+### Added
+- The [price series format](docs/price-series.md) is now documented as a contract: the *Upcoming prices* sensor is the way other integrations read the buy and sell prices.
+
 ## [0.2.1] - 2026-11-09
 
 ### Fixed

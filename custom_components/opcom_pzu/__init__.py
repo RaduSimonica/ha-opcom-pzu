@@ -1,4 +1,4 @@
-"""OPCOM PZU: Romanian day-ahead electricity prices, history and battery arbitrage."""
+"""OPCOM PZU: Romanian day-ahead electricity prices, history and the prices you pay and receive."""
 
 from __future__ import annotations
 
@@ -128,7 +128,31 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     return True
 
 
+# The battery planner moved to its own integration (Battery Planner) in 0.3.0.
+_MOVED_ENTITIES = (
+    "battery_gain_today", "battery_gain_tomorrow", "battery_gain_per_kwh_today",
+    "battery_gain_per_kwh_tomorrow", "battery_action",
+    "battery_profitable_today", "battery_profitable_tomorrow",
+)
+_MOVED_OPTIONS_PREFIX = "battery_"
+
+
+def _drop_moved_battery_settings(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Remove the battery entities and options this integration no longer has."""
+    registry = er.async_get(hass)
+    for key in _MOVED_ENTITIES:
+        for domain in ("sensor", "binary_sensor"):
+            if entity_id := registry.async_get_entity_id(domain, DOMAIN, f"{entry.entry_id}_{key}"):
+                registry.async_remove(entity_id)
+    stale = [k for k in entry.options if k.startswith(_MOVED_OPTIONS_PREFIX)]
+    if stale:  # before the update listener exists, so this does not reload
+        hass.config_entries.async_update_entry(
+            entry, options={k: v for k, v in entry.options.items() if k not in stale}
+        )
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: PzuConfigEntry) -> bool:
+    _drop_moved_battery_settings(hass, entry)
     session = create_session(hass)
     entry.async_on_unload(session.close)  # a reload must not leave sessions behind
     client = OpcomClient(session, CURRENCIES[entry.data[CONF_CURRENCY]])

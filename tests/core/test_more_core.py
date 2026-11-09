@@ -1,106 +1,18 @@
-"""More unit tests: invariants of the planner, pricing edge cases, series, blocks."""
+"""More unit tests: pricing edge cases, parser, series."""
 
-import random
 from datetime import date, datetime, timedelta, timezone
 
 import pytest
 
 from custom_components.opcom_pzu import settings
 from custom_components.opcom_pzu.api import OpcomParseError, day_bounds, parse_csv
-from custom_components.opcom_pzu.arbitrage import BatteryParams, Slot, plan
 from custom_components.opcom_pzu.pricing import Formula, FormulaError, Tariff
-from custom_components.opcom_pzu.sensor import _blocks
 from custom_components.opcom_pzu.series import Series, stats
 
 from .test_core import load
 
 T0 = datetime(2026, 1, 1, tzinfo=timezone.utc)
 STEP = timedelta(minutes=15)
-
-
-def slots(prices, sell=None):
-    sell = sell or prices
-    return [Slot(T0 + STEP * i, b, s) for i, (b, s) in enumerate(zip(prices, sell))]
-
-
-# -- planner invariants --------------------------------------------------------
-
-
-@pytest.mark.parametrize("seed", range(25))
-def test_plan_invariants_on_random_days(seed):
-    rnd = random.Random(seed)
-    params = BatteryParams(
-        capacity_kwh=rnd.choice([2, 5, 10, 40]),
-        max_charge_kw=rnd.choice([0.3, 1.2, 5, 12]),
-        max_discharge_kw=rnd.choice([0.3, 1.2, 5, 12]),
-        round_trip_efficiency=rnd.choice([0.7, 0.9, 1.0]),
-        degradation_per_kwh=rnd.choice([0, 0.1, 0.4]),
-    )
-    prices = [rnd.uniform(-0.2, 2.5) for _ in range(rnd.choice([12, 48, 96]))]
-    initial = rnd.choice([0.0, params.capacity_kwh / 2])
-    p = plan(slots(prices), 0.25, params, initial)
-
-    assert p.net_gain >= 0  # doing nothing is always possible
-    assert p.profitable == (p.net_gain > 0)
-    charge = [s for s in p.slots if s.action == "charge"]
-    discharge = [s for s in p.slots if s.action == "discharge"]
-    # Power limits (grid side) hold in every slot.
-    assert all(s.grid_kwh <= params.max_charge_kw * 0.25 + 1e-6 for s in charge)
-    assert all(s.grid_kwh <= params.max_discharge_kw * 0.25 + 1e-6 for s in discharge)
-    # Energy balance: what is sold comes from what was stored.
-    one_way = params.round_trip_efficiency**0.5
-    stored_in = sum(s.grid_kwh for s in charge) * one_way + initial
-    # (the planner rounds the starting energy to its grain, at most capacity/20)
-    assert sum(s.grid_kwh for s in discharge) / one_way <= stored_in + params.capacity_kwh / 20 + 1e-6
-    # Replaying the schedule never leaves the battery below empty or above full.
-    level = initial
-    for s in p.slots:
-        level += s.grid_kwh * one_way if s.action == "charge" else -s.grid_kwh / one_way
-        assert -params.capacity_kwh / 20 - 1e-6 <= level <= params.capacity_kwh * 1.05 + 1e-6  # grain
-
-
-def test_flat_prices_never_trade():
-    assert not plan(slots([1.0] * 96), 0.25, BatteryParams()).profitable
-
-
-def test_a_dearer_battery_never_gains_more():
-    prices = [0.3] * 8 + [2.0] * 8 + [0.4] * 8 + [2.2] * 8
-    gains = [plan(slots(prices), 0.25, BatteryParams(degradation_per_kwh=d)).net_gain for d in (0, 0.2, 0.6, 5)]
-    assert gains == sorted(gains, reverse=True) and gains[-1] == 0
-
-
-def test_better_efficiency_never_gains_less():
-    prices = [0.3] * 8 + [1.5] * 8
-    gains = [plan(slots(prices), 0.25, BatteryParams(round_trip_efficiency=e)).net_gain for e in (0.6, 0.8, 1.0)]
-    assert gains == sorted(gains)
-
-
-def test_negative_buy_price_pays_to_charge():
-    p = plan(slots([-1.0, -1.0, 0.5, 0.5], [-1.0, -1.0, 0.5, 0.5]), 0.25, BatteryParams(degradation_per_kwh=0))
-    assert p.profitable and p.slots[0].action == "charge"
-
-
-def test_own_buy_and_sell_prices_are_used():
-    # Cheap to buy, but the sell price is always below the break-even: no trade.
-    assert not plan(slots([0.1] * 4 + [0.1] * 4, [0.05] * 8), 0.25, BatteryParams()).profitable
-
-
-def test_empty_and_degenerate_inputs():
-    assert not plan([], 0.25, BatteryParams()).profitable
-    assert not plan(slots([1, 2]), 0.25, BatteryParams(capacity_kwh=0)).profitable
-    assert not plan(slots([1, 2]), 0.25, BatteryParams(max_charge_kw=0)).profitable
-    assert not plan(slots([1, 2]), 0.25, BatteryParams(max_discharge_kw=0)).profitable
-
-
-def test_slot_with_no_time_left_does_nothing():
-    cheap_then_dear = [Slot(T0, 0.1, 0.1, fraction=0.0), Slot(T0 + STEP, 3.0, 3.0)]
-    assert not plan(cheap_then_dear, 0.25, BatteryParams()).profitable
-
-
-def test_hourly_resolution():
-    prices = [0.3, 0.3, 2.0, 2.0]
-    p = plan([Slot(T0 + timedelta(hours=i), x, x) for i, x in enumerate(prices)], 1.0, BatteryParams())
-    assert p.profitable and p.slots[0].start == T0
 
 
 # -- pricing -------------------------------------------------------------------
@@ -157,12 +69,8 @@ def test_describe_shows_what_is_in_use():
 
 
 def test_settings_defaults_and_overrides():
-    b = settings.battery({})
-    assert (b.capacity_kwh, b.max_charge_kw, b.max_discharge_kw) == (10.0, 5.0, 5.0)
-    assert b.round_trip_efficiency == pytest.approx(0.9)
     assert settings.tariff({}).buy_vat_pct == 21.0
-    over = settings.battery({"battery_charge_power_kw": 0.3, "battery_discharge_power_kw": 1.2, "battery_power_kw": 9})
-    assert (over.max_charge_kw, over.max_discharge_kw) == (0.3, 1.2)  # the new fields win over the legacy one
+    assert settings.tariff({"buy_vat_pct": 9.0, "sell_formula": "pzu"}).sell_formula == "pzu"
 
 
 # -- parser --------------------------------------------------------------------
@@ -242,21 +150,3 @@ def test_stats_are_time_weighted():
     assert (s.minimum, s.maximum) == (1.0, 3.0) and s.max_start == pts[1].start
     assert stats([]) is None
     assert stats(pts, [10.0, -5.0]).minimum == -5.0  # custom prices (buy/sell) override spot
-
-
-# -- schedule blocks -----------------------------------------------------------
-
-
-def test_blocks_merge_neighbouring_slots():
-    p = plan(slots([0.2] * 4 + [3.0] * 4), 0.25, BatteryParams(degradation_per_kwh=0))
-    blocks = _blocks(p, STEP)
-    assert [b["action"] for b in blocks] == ["charge", "discharge"]
-    assert blocks[0]["from"] != blocks[0]["to"]
-    assert blocks[0]["avg_price"] == pytest.approx(0.2) and blocks[1]["avg_price"] == pytest.approx(3.0)
-    assert blocks[0]["kwh"] == pytest.approx(sum(s.grid_kwh for s in p.slots if s.action == "charge"), abs=0.01)
-
-
-def test_blocks_split_when_not_contiguous():
-    p = plan(slots([0.2, 3.0, 3.0, 0.2, 3.0]), 0.25, BatteryParams(capacity_kwh=1.2, degradation_per_kwh=0))
-    actions = [b["action"] for b in _blocks(p, STEP)]
-    assert actions.count("charge") >= 1 and "discharge" in actions
