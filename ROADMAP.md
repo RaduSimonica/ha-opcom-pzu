@@ -4,7 +4,30 @@ Planned improvements, not implemented yet. Each ships as a version of its own
 (see [CONTRIBUTING.md](CONTRIBUTING.md): bump the manifest version and add a
 changelog section in every pull request into `main`).
 
-## 1. Battery share: how much of the battery to use
+## 0. Split into two integrations
+
+**OPCOM PZU** (this repository) keeps everything about prices. **Battery
+Planner** ([RaduSimonica/battery-planner](https://github.com/RaduSimonica/battery-planner),
+new) takes price series, a battery, and optionally solar and consumption, and
+plans when to charge and discharge. They are joined only by the
+[price series contract](docs/price-series.md), so Battery Planner also works with
+other price sources and with fixed prices.
+
+Order of work:
+
+1. Write the contract (`docs/price-series.md`, done).
+2. Battery Planner repository: move the planner, battery options and sensors,
+   their tests and the battery dashboard example; add the price-source picker
+   (an entity that follows the contract, or fixed buy/sell prices, or a
+   time-of-use schedule).
+3. OPCOM PZU 0.3.0: remove the battery code and entities, with a migration
+   note in the changelog (the entities move to Battery Planner) and the README.
+4. Then the items below, each in the repository named in its title.
+
+Entity IDs and settings of the battery move with it, so this is a breaking
+change for current users: say so clearly in the changelog.
+
+## 1. [Battery Planner] Battery share: how much of the battery to use
 
 Users choose a percentage of the battery the planner may work with, e.g. 50%.
 
@@ -23,7 +46,7 @@ Users choose a percentage of the battery the planner may work with, e.g. 50%.
   zero available energy; with 100% nothing changes. Add the field to the
   English and Romanian translations and the README.
 
-## 2. Developer name on the device
+## 2. [OPCOM PZU, and Battery Planner] Developer name on the device
 
 Show "By Radu Simonica" instead of "By OPCOM".
 
@@ -32,7 +55,7 @@ Show "By Radu Simonica" instead of "By OPCOM".
   updated when the entities are set up). Keep the model as "PZU day-ahead market".
 - The data source stays credited to OPCOM in the README.
 
-## 3. One price chart instead of two
+## 3. [OPCOM PZU] One price chart instead of two
 
 The "today" and "upcoming" example cards become a single `prices.yaml`.
 
@@ -50,7 +73,7 @@ The "today" and "upcoming" example cards become a single `prices.yaml`.
 - Check the generator against real integration output (as done for 0.2.0), and
   update the cards on the test dashboard.
 
-## 4. Countdown sensors: time to the cheapest price
+## 4. [Battery Planner] Countdown sensors: time to the cheapest price
 
 Timer sensors that count down in minutes.
 
@@ -70,7 +93,7 @@ Timer sensors that count down in minutes.
 - Tests: expected minutes computed independently from the fixture CSV, and the
   value dropping by one after a minute passes. Add translations and a README
   entry; a dashboard example is optional.
-## 5. Pre-filled formulas for common Romanian suppliers
+## 5. [OPCOM PZU] Pre-filled formulas for common Romanian suppliers
 
 Let users pick their supplier's plan in the buy and sell pages and fill the
 formula fields for them (they stay editable). Prices are per kWh, with VAT
@@ -90,7 +113,7 @@ where it applies to the buy price.
   their rates. Tests: every plan's formulas compile and give the expected buy
   and sell price for a sample spot price (including a negative one).
 
-## 6. Energy and state-of-charge forecast sensors
+## 6. [Battery Planner] Energy and state-of-charge forecast sensors
 
 What the plan will do, in energy rather than money. Built from the same plan
 as the battery gain sensors (today from the real state of charge, tomorrow from
@@ -112,7 +135,7 @@ empty), so they stay consistent with it.
   (net of efficiency) - sold, and the energy sensors equal the sums over the
   schedule windows. Translations and README.
 
-## 7. Custom dashboard card(s)
+## 7. [Battery Planner, price card in OPCOM PZU] Custom dashboard card(s)
 
 apexcharts-card works but is not the nicest to look at, and each example needs
 a long block of YAML. A card made for this integration would look better and be
@@ -134,3 +157,70 @@ one line to add.
 - Decide first whether it is one card with options or two, and whether to build
   on Lit (as Home Assistant does) or plain web components. Keep the apexcharts
   examples as the fallback.
+
+## 8. [Battery Planner] Solar and house consumption in the plan
+
+Take the user's solar production, consumption and solar forecast into account,
+so the planner knows how much of the battery can really be sold, and does not
+sell energy the house will need later and buy back at a higher price.
+
+**Why the current planner is not enough.** It values every kWh at the market:
+buy to charge, sell to discharge. With solar and a house load, energy that
+leaves the battery to power the house is worth the *buy* price it avoids, not
+the sell price, and surplus solar is free energy to store. The battery's use for
+arbitrage is whatever is left after the house's needs, and that depends on the
+forecast.
+
+**Model.** For each interval, the house needs `net = consumption - solar`
+(negative = surplus). The grid exchange is `net` plus charging minus
+discharging (battery power limits unchanged). Importing costs the buy price,
+exporting earns the sell price. The planner minimises the total cost over the
+horizon with the same dynamic programme (the per-interval cost is just
+piecewise linear), and the *gain* is the cost without the battery minus the
+cost with it. Nothing else changes: degradation per kWh discharged,
+efficiency, separate charge and discharge power, start level from the SoC
+sensor.
+
+- Arbitrage then happens only when it beats using the energy at home, and the
+  "reserve for the house" is an outcome, not a setting. Item 1 (usable share)
+  stays as a manual floor on top of it.
+- Tomorrow's plan can start from today's *projected* end-of-day level instead of
+  an empty battery (item 6 provides it), which is a better assumption once
+  solar and load are known.
+
+**Inputs (all optional, all existing sensors the user picks):**
+- *Solar production now* (W or kW) and *house consumption now* (W or kW), used
+  for the current interval and to correct the forecast.
+- *Solar forecast*: the Home Assistant energy platform already offers one
+  (Forecast.Solar, Solcast and others register as forecast providers, hourly
+  Wh), so use that through the Energy dashboard's configured solar source
+  rather than asking for a sensor; fall back to a sensor with a forecast
+  attribute.
+- *Consumption forecast*: there is no ready one, so learn it from the
+  consumption sensor's own long-term statistics: the average per time of day
+  over the last weeks, separately for weekdays and weekends. Until enough
+  history exists, use a flat value from the last 24 hours.
+- Without any of these the planner behaves exactly as today.
+
+**New sensors:** expected self-consumption (share of the house load covered by
+solar and battery), grid import avoided, energy the battery can export for
+arbitrage ("usable for arbitrage", kWh), energy kept as house reserve, and the
+projected state of charge curve of item 6 including solar and load.
+
+**Care needed:**
+- Forecasts are wrong. Show the assumptions in attributes, re-plan every 15
+  minutes with the real readings (already done for the SoC), and consider a
+  safety margin option on the forecast (e.g. use 80% of it).
+- Zero-export or export-limited installations: an option for the maximum export
+  power; surplus beyond it is curtailed or must be stored.
+- Negative prices: exporting at a negative price should be avoided (store or
+  curtail), which the cost model handles once the export power limit exists.
+- Units and clamping for every picked sensor, as done for the SoC and capacity.
+- Tests: with no solar and no load the result equals today's plan; the gain is
+  never below zero; a night-time load reduces the energy planned for export; a
+  sunny forecast lowers the energy bought to charge; the energy balance (grid +
+  solar = load + battery change) holds in every interval; the consumption
+  profile learned from statistics matches a hand-made series.
+
+Build this after items 4 and 6 (it reuses the state-of-charge curve) and before
+the custom cards (item 7), so the cards can show the house reserve too.
