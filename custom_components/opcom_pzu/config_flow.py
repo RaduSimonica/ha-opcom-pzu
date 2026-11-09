@@ -13,16 +13,18 @@ from homeassistant.helpers.selector import (
     NumberSelectorMode,
     SelectSelector,
     SelectSelectorConfig,
+    SelectSelectorMode,
     TextSelector,
 )
 from homeassistant.util import dt as dt_util
 
-from . import settings
+from . import plans, settings
 from .api import OpcomClient, OpcomError
 from .const import (
     CONF_BUY_FIXED_CHARGES,
     CONF_BUY_FORMULA,
     CONF_BUY_MARKUP,
+    CONF_BUY_PLAN,
     CONF_BUY_VAT,
     CONF_CHEAP_PERCENTILE,
     CONF_CURRENCY,
@@ -30,6 +32,7 @@ from .const import (
     CONF_SELL_COMMISSION,
     CONF_SELL_FIXED_FEE,
     CONF_SELL_FORMULA,
+    CONF_SELL_PLAN,
     CURRENCIES,
     DEFAULT_CHEAP_PERCENTILE,
     DEFAULT_CURRENCY,
@@ -50,6 +53,10 @@ def _num(minimum: float, maximum: float, step: float, unit: str | None = None) -
 
 
 _TEXT = TextSelector()
+
+
+def _plan_selector(side: str) -> SelectSelector:
+    return SelectSelector(SelectSelectorConfig(options=plans.options(), mode=SelectSelectorMode.DROPDOWN))
 
 
 def _months_selector() -> NumberSelector:
@@ -151,19 +158,32 @@ class OpcomPzuOptionsFlow(OptionsFlow):
             },
         )
 
-    async def _tariff_step(self, step: str, schema: dict, formula_key: str,
+    async def _tariff_step(self, step: str, schema: dict, formula_key: str, plan_key: str,
                            user_input: dict[str, Any] | None) -> ConfigFlowResult:
         if user_input is not None:
             candidate = self._options | user_input
             for key in schema:  # an emptied field is left out of the submission
                 if key.schema not in user_input:
-                    candidate[key.schema] = "" if key.schema.endswith("_formula") else 0.0
+                    candidate[key.schema] = (
+                        plans.CUSTOM if key.schema == plan_key
+                        else "" if key.schema.endswith("_formula") else 0.0
+                    )
+            chosen = candidate[plan_key]
+            fill = False
+            if chosen != plans.CUSTOM:
+                planned = plans.formula(chosen, step)
+                if chosen != self._options.get(plan_key, plans.CUSTOM):
+                    candidate[formula_key], fill = planned, True  # a new plan: fill its formula
+                elif candidate[formula_key].strip() != planned:
+                    candidate[plan_key] = plans.CUSTOM  # they edited it: it is their own now
             try:
                 settings.tariff(candidate).compile()
             except FormulaError as err:
                 self._options = candidate  # keep what they typed
                 return self._form(step, schema, {formula_key: "invalid_formula"}, {"error": str(err)})
             self._options = candidate
+            if fill:  # show the filled formula so it can be checked and edited
+                return self._form(step, schema)
             return await self.async_step_init()
         return self._form(step, schema)
 
@@ -171,20 +191,22 @@ class OpcomPzuOptionsFlow(OptionsFlow):
 
     async def async_step_sell(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         schema = {
+            vol.Optional(CONF_SELL_PLAN): _plan_selector("sell"),
             vol.Optional(CONF_SELL_COMMISSION): _num(0, 100, 0.1, "%"),
             vol.Optional(CONF_SELL_FIXED_FEE): _num(0, 100, 0.001),
             vol.Optional(CONF_SELL_FORMULA): _TEXT,
         }
-        return await self._tariff_step("sell", schema, CONF_SELL_FORMULA, user_input)
+        return await self._tariff_step("sell", schema, CONF_SELL_FORMULA, CONF_SELL_PLAN, user_input)
 
     async def async_step_buy(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         schema = {
+            vol.Optional(CONF_BUY_PLAN): _plan_selector("buy"),
             vol.Optional(CONF_BUY_MARKUP): _num(0, 1000, 0.1, "%"),
             vol.Optional(CONF_BUY_FIXED_CHARGES): _num(0, 100, 0.001),
             vol.Optional(CONF_BUY_VAT): _num(0, 100, 0.1, "%"),
             vol.Optional(CONF_BUY_FORMULA): _TEXT,
         }
-        return await self._tariff_step("buy", schema, CONF_BUY_FORMULA, user_input)
+        return await self._tariff_step("buy", schema, CONF_BUY_FORMULA, CONF_BUY_PLAN, user_input)
 
     async def async_step_general(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         schema = {

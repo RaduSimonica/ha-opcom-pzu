@@ -16,6 +16,8 @@ CONF_BUY_MARKUP = "buy_markup_pct"
 CONF_BUY_FIXED_CHARGES = "buy_fixed_charges"
 CONF_BUY_VAT = "buy_vat_pct"
 CONF_BUY_FORMULA = "buy_formula"
+CONF_BUY_PLAN = "buy_plan"
+CONF_SELL_PLAN = "sell_plan"
 
 CONF_CHEAP_PERCENTILE = "cheap_percentile"
 

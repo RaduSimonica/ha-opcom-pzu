@@ -12,6 +12,8 @@ Romanian day-ahead (PZU) electricity prices in Home Assistant: free, no account,
 
 HACS → Custom repositories → add this repository as *Integration* → install → restart. HACS shows the released version (see the [changelog](CHANGELOG.md)). Then *Settings → Devices & services → Add integration → OPCOM PZU*.
 
+**Snapshots:** new things first appear as pre-releases (`vX.Y.Z-snapshot.N`). To try them, open the repository in HACS, menu → *Show beta versions*, then update. Stable releases are published once in a while from the snapshots that proved fine.
+
 ## Setup
 
 You choose a currency (RON or EUR; fixed afterwards) and how many months of history to download.
@@ -20,12 +22,26 @@ You choose a currency (RON or EUR; fixed afterwards) and how many months of hist
 
 ## Your buy and sell price
 
-*Configure → Buy price / Sell price.* Each page shows a live example using the current spot price.
+*Configure → Buy price / Sell price.* Each page shows a live example using the current spot price. Pick your **supplier plan** to fill in the formula (see below), or keep *Custom*.
 
 | | Simple fields | Formula (optional, replaces the fields) |
 |---|---|---|
 | **Sell** (what you receive) | `spot × (1 − commission%) − fixed fee` | e.g. `max(pzu*0.9 - 0.05, 0)` |
 | **Buy** (what you pay) | `(spot × (1 + markup%) + fixed charges) × (1 + VAT%)` | e.g. `(pzu + 0.45) * 1.21` |
+
+### Supplier plans
+
+Choosing a plan fills the formula for you, and you can still edit it (it then becomes *Custom*). Figures as published on 2026-11-09; suppliers change their rates, so check yours.
+
+| Plan | Buy | Sell |
+|---|---|---|
+| E.ON Dinamic Pro | `(pzu + 0.10 + 0.464) * 1.21` | `pzu` |
+| PPC MaxControl | `(max(min(pzu, 0.999), 0) + 0.097 + 0.00363 + 0.464) * 1.21` | `max(pzu, 0)` |
+| Yellowgrid | `(min(0.75*pzu + 0.1375, 0.55) + 0.464) * 1.21` | `max(0.125 + 0.75*pzu, 0.5)` |
+
+Your plan missing? Open an issue with its formula: adding one is a single line.
+
+### Formulas
 
 Formulas are plain arithmetic over `pzu` (spot, currency/kWh) and `hour` (local hour, for time-of-use tariffs), with `+ - * / ** %`, `min`, `max`, `abs`, `round`, `floor`, `ceil`. Nothing else runs, and mistakes are caught when you save.
 
@@ -60,12 +76,11 @@ period: day
 
 ## Dashboards
 
-Ready-to-paste cards are in [`examples/dashboards/`](examples/dashboards) (they need [apexcharts-card](https://github.com/RomRider/apexcharts-card) from HACS):
+A ready-to-paste card is in [`examples/dashboards/`](examples/dashboards) (it needs [apexcharts-card](https://github.com/RomRider/apexcharts-card) from HACS):
 
 | File | Shows |
 |---|---|
-| `today.yaml` | Today's spot price as columns coloured by level, plus your buy price |
-| `upcoming.yaml` | Every price from now on (today and tomorrow), spot, buy and sell |
+| `prices.yaml` | One chart: the last hours and every price ahead (today and tomorrow), spot as columns coloured by level, plus your buy and sell price, with a marker for now |
 
 Paste the YAML into a card's code editor. **Entity IDs:** the cards use `sensor.opcom_pzu_...`, but Home Assistant adds the device's area to the ID of entities created while the device is in an area (e.g. `sensor.server_opcom_pzu_upcoming_prices`). If a card says *Entity not available*, copy the real ID from *Settings → Devices & services → OPCOM PZU*. The `prices` attributes (`start`, `end`, `spot`, `buy`, `sell`) also work with any other chart card or a template.
 

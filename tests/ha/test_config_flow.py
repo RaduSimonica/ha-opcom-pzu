@@ -75,3 +75,57 @@ async def test_emptied_fields_are_reset(hass, entry, aioclient_mock, freezer):
     await hass.async_block_till_done()
     assert entry.options["sell_formula"] == "" and entry.options["sell_fixed_fee"] == 0.0
     assert entry.options["sell_commission_pct"] == 5
+
+
+async def _open(hass, entry, page):
+    flow = await hass.config_entries.options.async_init(entry.entry_id)
+    return await hass.config_entries.options.async_configure(flow["flow_id"], {"next_step_id": page})
+
+
+async def test_picking_a_plan_fills_the_formula(hass, entry, aioclient_mock, freezer):
+    freezer.move_to("2026-11-09 12:00:00+02:00")
+    publish(aioclient_mock, date(2026, 11, 8), date(2026, 11, 9), date(2026, 11, 10))
+    flow = await _open(hass, entry, "buy")
+    shown = await hass.config_entries.options.async_configure(
+        flow["flow_id"], {"buy_plan": "eon_dinamic_pro"}
+    )
+    # The page is shown again with the formula filled, so it can be checked.
+    assert shown["type"] is FlowResultType.FORM and shown["step_id"] == "buy"
+    assert any(
+        k.schema == "buy_formula" and k.description["suggested_value"] == "(pzu + 0.10 + 0.464) * 1.21"
+        for k in shown["data_schema"].schema
+    )
+    ok = await hass.config_entries.options.async_configure(
+        shown["flow_id"], {"buy_plan": "eon_dinamic_pro", "buy_formula": "(pzu + 0.10 + 0.464) * 1.21"}
+    )
+    done = await hass.config_entries.options.async_configure(ok["flow_id"], {"next_step_id": "finish"})
+    assert done["data"]["buy_plan"] == "eon_dinamic_pro"
+    assert done["data"]["buy_formula"] == "(pzu + 0.10 + 0.464) * 1.21"
+
+
+async def test_editing_a_plan_formula_makes_it_custom(hass, entry, aioclient_mock, freezer):
+    freezer.move_to("2026-11-09 12:00:00+02:00")
+    publish(aioclient_mock, date(2026, 11, 8), date(2026, 11, 9), date(2026, 11, 10))
+    hass.config_entries.async_update_entry(
+        entry, options={"sell_plan": "eon_dinamic_pro", "sell_formula": "pzu"}
+    )
+    flow = await _open(hass, entry, "sell")
+    ok = await hass.config_entries.options.async_configure(
+        flow["flow_id"], {"sell_plan": "eon_dinamic_pro", "sell_formula": "pzu * 0.9"}
+    )
+    done = await hass.config_entries.options.async_configure(ok["flow_id"], {"next_step_id": "finish"})
+    assert done["data"]["sell_plan"] == "custom" and done["data"]["sell_formula"] == "pzu * 0.9"
+
+
+async def test_choosing_custom_keeps_what_was_typed(hass, entry, aioclient_mock, freezer):
+    freezer.move_to("2026-11-09 12:00:00+02:00")
+    publish(aioclient_mock, date(2026, 11, 8), date(2026, 11, 9), date(2026, 11, 10))
+    hass.config_entries.async_update_entry(
+        entry, options={"sell_plan": "yellowgrid", "sell_formula": "max(0.125 + 0.75*pzu, 0.5)"}
+    )
+    flow = await _open(hass, entry, "sell")
+    ok = await hass.config_entries.options.async_configure(
+        flow["flow_id"], {"sell_plan": "custom", "sell_formula": "pzu - 0.1"}
+    )
+    done = await hass.config_entries.options.async_configure(ok["flow_id"], {"next_step_id": "finish"})
+    assert done["data"]["sell_plan"] == "custom" and done["data"]["sell_formula"] == "pzu - 0.1"
