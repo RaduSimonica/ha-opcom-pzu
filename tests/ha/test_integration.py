@@ -56,6 +56,30 @@ async def test_tomorrow_polling_after_1315(hass, entry, aioclient_mock, freezer)
     assert len(prices.attributes["prices"]) == 96
 
 
+async def test_tomorrow_is_fetched_after_a_night_of_uptime(hass, entry, aioclient_mock, freezer):
+    """Regression: HA running across midnight never asked for the next day.
+
+    The market day changes at 01:00 local time (midnight in Berlin), an hour after
+    the local date does, and nothing scheduled a fetch for the new day.
+    """
+    freezer.move_to("2026-11-10 00:30:00+02:00")  # still 2026-11-09 in the market
+    publish(aioclient_mock, date(2026, 11, 8), date(2026, 11, 9), date(2026, 11, 10))
+    await setup(hass, entry)
+    assert hass.states.get("binary_sensor.opcom_pzu_tomorrow_s_prices_published").state == "off"
+
+    freezer.move_to("2026-11-10 01:00:03+02:00")  # the market day turns over
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done()
+
+    # Hours later OPCOM publishes 11 November; the next poll must find it.
+    aioclient_mock.clear_requests()
+    publish(aioclient_mock, date(2026, 11, 8), date(2026, 11, 9), date(2026, 11, 10), date(2026, 11, 11))
+    freezer.move_to("2026-11-10 13:40:00+02:00")
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done()
+    assert hass.states.get("binary_sensor.opcom_pzu_tomorrow_s_prices_published").state == "on"
+
+
 async def test_option_changes_prices(hass, entry, aioclient_mock, freezer):
     freezer.move_to("2026-11-09 12:00:00+02:00")
     publish(aioclient_mock, date(2026, 11, 8), date(2026, 11, 9), date(2026, 11, 10))
