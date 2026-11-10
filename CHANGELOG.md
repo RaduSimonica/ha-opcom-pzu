@@ -6,6 +6,11 @@ publishes a GitHub release with this section as its notes, which is what HACS
 shows as the version. Versions follow [semantic versioning](https://semver.org):
 `0.x.0` for new features, `0.x.y` for fixes.
 
+## [0.3.1] - 2026-11-10
+
+### Fixed
+- **Tomorrow's prices were not fetched after Home Assistant ran past midnight.** The market day turns over at 01:00 local time, an hour after the local date, and nothing scheduled a fetch for the new "tomorrow", so it only appeared after a restart or the next midnight. The integration now notices that the market day moved on, and checks every 15 minutes that nothing it waits for is left without a timer. If you are affected now, call `opcom_pzu.refresh` once, or restart Home Assistant.
+
 ## [0.3.0] - 2026-11-09
 
 ### Changed (breaking)

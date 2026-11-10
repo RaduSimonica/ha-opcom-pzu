@@ -61,6 +61,7 @@ class PzuCoordinator(DataUpdateCoordinator[PzuData]):
         self._jitter = timedelta(seconds=random.randint(0, JITTER_SECONDS))
         self._timer: CALLBACK_TYPE | None = None
         self._built_for: date | None = None
+        self._built_days: list[date] = []  # the market days the last refresh planned for
 
     # -- lifecycle -----------------------------------------------------------
 
@@ -79,11 +80,23 @@ class PzuCoordinator(DataUpdateCoordinator[PzuData]):
 
     @callback
     def _tick(self, _now: datetime) -> None:
-        if dt_util.now().date() != self._built_for:
-            self.hass.async_create_task(self.async_refresh())  # day rolled over
+        if self._needs_refresh():
+            self.hass.async_create_task(self.async_refresh())
         else:
             self._import_recent()  # keep the long-term statistics current
             self.async_update_listeners()  # the current interval moved on
+
+    def _needs_refresh(self) -> bool:
+        """A new day began, or the market moved on to a day nobody is waiting for yet.
+
+        The market day turns over at 01:00 local time (midnight in Berlin), an hour
+        after the local date. Without this check, a Home Assistant that ran across
+        that hour never scheduled a fetch for the new "tomorrow". A pending day with
+        no timer set is also caught here, as a safety net.
+        """
+        if dt_util.now().date() != self._built_for or self._wanted_days() != self._built_days:
+            return True
+        return self._timer is None and any(not self.store.has(d) for d in self._wanted_days())
 
     def _import_recent(self) -> None:
         """Long-term statistics for the hours that have passed (idempotent)."""
@@ -146,6 +159,7 @@ class PzuCoordinator(DataUpdateCoordinator[PzuData]):
             if series.at(now) is None:
                 raise UpdateFailed("No prices available for the current interval")
             self._built_for = dt_util.now().date()
+            self._built_days = self._wanted_days()
             data = PzuData(series, self.last_fetch)
             return data
         finally:
