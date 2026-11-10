@@ -1,0 +1,50 @@
+name: Bug report
+description: Something does not work, or a number looks wrong
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for testing. This integration is in beta, so reports are very welcome.
+        Please attach the **diagnostics file**: *Settings → Devices & services → OPCOM PZU → three dots → Download diagnostics*. It has no passwords or personal data.
+  - type: input
+    id: version
+    attributes:
+      label: Integration version
+      description: Shown in HACS, e.g. 0.4.0
+    validations:
+      required: true
+  - type: input
+    id: ha
+    attributes:
+      label: Home Assistant version
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: How can it be reproduced?
+      description: What you changed or clicked before it happened.
+  - type: dropdown
+    id: plan
+    attributes:
+      label: Supplier plan
+      description: If it is about the buy or sell price.
+      options: [Not about prices, E.ON Dinamic Pro, PPC MaxControl, Yellowgrid, Custom formula, Simple fields]
+  - type: textarea
+    id: logs
+    attributes:
+      label: Log lines
+      description: Settings → System → Logs, search for `opcom_pzu`. Paste them here.
+      render: text
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics file
+      description: Drag the downloaded file here.

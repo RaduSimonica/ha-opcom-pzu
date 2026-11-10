@@ -469,3 +469,21 @@ async def test_the_series_follows_the_price_series_contract(hass, entry, aioclie
         assert isinstance(row["buy"], float) and isinstance(row["sell"], float)
         assert previous_end in (None, start)  # contiguous, oldest first
         previous_end = end
+
+
+async def test_diagnostics_have_what_a_bug_report_needs(hass, entry, aioclient_mock, freezer):
+    from datetime import date
+
+    from custom_components.opcom_pzu.diagnostics import async_get_config_entry_diagnostics
+
+    from .conftest import publish
+
+    freezer.move_to("2026-11-09 12:00:00+02:00")
+    publish(aioclient_mock, date(2026, 11, 8), date(2026, 11, 9), empty=(date(2026, 11, 10),))
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    diag = await async_get_config_entry_diagnostics(hass, entry)
+    assert diag["integration_version"] and diag["home_assistant"]["version"]
+    assert diag["prices"]["today_stored"] is True and diag["prices"]["tomorrow_stored"] is False
+    assert diag["prices"]["intervals_from_now"] > 40 and diag["prices"]["last_day"] == "2026-11-09"
+    assert diag["config"]["currency"] == "RON"

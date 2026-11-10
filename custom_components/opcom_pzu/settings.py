@@ -8,11 +8,14 @@ from .const import (
     CONF_BUY_FIXED_CHARGES,
     CONF_BUY_FORMULA,
     CONF_BUY_MARKUP,
+    CONF_BUY_PLAN,
     CONF_BUY_VAT,
     CONF_SELL_COMMISSION,
     CONF_SELL_FIXED_FEE,
     CONF_SELL_FORMULA,
+    CONF_SELL_PLAN,
 )
+from .plans import CUSTOM
 from .pricing import Tariff
 
 DEFAULTS: dict[str, Any] = {
@@ -23,6 +26,8 @@ DEFAULTS: dict[str, Any] = {
     CONF_BUY_FIXED_CHARGES: 0.0,
     CONF_BUY_VAT: 21.0,
     CONF_BUY_FORMULA: "",
+    CONF_BUY_PLAN: CUSTOM,
+    CONF_SELL_PLAN: CUSTOM,
 }
 
 

@@ -20,7 +20,7 @@ class PzuEntity(CoordinatorEntity[PzuCoordinator]):
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, entry_id)},
             name=NAME,
-            manufacturer="OPCOM",
+            manufacturer="Radu Simonica",
             model="PZU day-ahead market",
             entry_type=DeviceEntryType.SERVICE,
             configuration_url="https://www.opcom.ro/grafice-ip-raportPIP-si-volumTranzactionat/ro",

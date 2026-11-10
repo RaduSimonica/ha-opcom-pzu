@@ -1,0 +1,86 @@
+# One price chart: the recent past and everything ahead (the rest of today and
+# tomorrow once OPCOM has published it, around 13:45), with a marker for now.
+# Needs apexcharts-card (HACS -> Frontend).
+# The past comes from "Prices today", the future from "Upcoming prices"; both
+# are merged by start time. graph_span and the offset in span set the window:
+#   - rolling (default): 6 hours back, 30 hours ahead
+#   - the whole day: span.start: day, graph_span: 48h
+# Colour thresholds are in RON/kWh: adjust them to your taste (and to EUR).
+# ENTITY IDS: these use the default ids (sensor.opcom_pzu_...). Home Assistant
+# prefixes the area of the device to entities created while it sits in an
+# area (e.g. sensor.server_opcom_pzu_upcoming_prices). If a series says
+# "Entity not available", look up the real id under Settings -> Devices &
+# services -> OPCOM PZU and replace it in the card (in `entity` and in the
+# `hass.states[...]` line of each series).
+type: custom:apexcharts-card
+header:
+  show: true
+  title: PZU prices
+  show_states: true
+  colorize_states: true
+graph_span: 36h
+span:
+  start: hour
+  offset: -6h
+now:
+  show: true
+  label: Now
+  color: "#e74c3c"
+apex_config:
+  plotOptions:
+    bar:
+      colors:
+        ranges:
+          - { from: -100, to: 0.45, color: "#2ed573" }
+          - { from: 0.450001, to: 1, color: "#ffd32a" }
+          - { from: 1.000001, to: 2, color: "#ffa550" }
+          - { from: 2.000001, to: 100, color: "#9b59b6" }
+series:
+  - entity: sensor.opcom_pzu_upcoming_prices
+    name: Spot price
+    type: column
+    float_precision: 4
+    show:
+      in_header: false
+    data_generator: |
+      const rows = {};
+      const today = hass.states["sensor.opcom_pzu_prices_today"];
+      for (const p of (today && today.attributes.prices) || []) rows[p.start] = p;
+      for (const p of entity.attributes.prices || []) rows[p.start] = p;
+      return Object.values(rows)
+        .sort((a, b) => new Date(a.start) - new Date(b.start))
+        .map(p => [new Date(p.start).getTime(), p.spot]);
+  - entity: sensor.opcom_pzu_upcoming_prices
+    name: Buy price
+    type: line
+    curve: stepline
+    color: "#ff4757"
+    stroke_width: 3
+    float_precision: 4
+    show:
+      in_header: false
+    data_generator: |
+      const rows = {};
+      const today = hass.states["sensor.opcom_pzu_prices_today"];
+      for (const p of (today && today.attributes.prices) || []) rows[p.start] = p;
+      for (const p of entity.attributes.prices || []) rows[p.start] = p;
+      return Object.values(rows)
+        .sort((a, b) => new Date(a.start) - new Date(b.start))
+        .map(p => [new Date(p.start).getTime(), p.buy]);
+  - entity: sensor.opcom_pzu_upcoming_prices
+    name: Sell price
+    type: line
+    curve: stepline
+    color: "#1e90ff"
+    stroke_width: 2
+    float_precision: 4
+    show:
+      in_header: false
+    data_generator: |
+      const rows = {};
+      const today = hass.states["sensor.opcom_pzu_prices_today"];
+      for (const p of (today && today.attributes.prices) || []) rows[p.start] = p;
+      for (const p of entity.attributes.prices || []) rows[p.start] = p;
+      return Object.values(rows)
+        .sort((a, b) => new Date(a.start) - new Date(b.start))
+        .map(p => [new Date(p.start).getTime(), p.sell]);

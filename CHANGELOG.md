@@ -1,10 +1,22 @@
 # Changelog
 
-Every pull request into `main` bumps the version in
-`custom_components/opcom_pzu/manifest.json` and adds a section here. Merging
-publishes a GitHub release with this section as its notes, which is what HACS
-shows as the version. Versions follow [semantic versioning](https://semver.org):
-`0.x.0` for new features, `0.x.y` for fixes.
+Pull requests into `staging` add a snapshot section (`## [X.Y.Z-snapshot.N]`) and
+publish a pre-release; the pull request into `main` replaces them with one
+`## [X.Y.Z]` section and publishes the stable release that HACS shows as the
+version. See [CONTRIBUTING.md](CONTRIBUTING.md). Versions follow
+[semantic versioning](https://semver.org): `0.x.0` for new features, `0.x.y`
+for fixes.
+
+## [0.4.0] - 2026-11-10
+
+### Added
+- **Supplier plans.** The buy and sell pages have a *Supplier plan* selector (E.ON Dinamic Pro, PPC MaxControl, Yellowgrid) that fills the formula. You can edit the formula afterwards, and it becomes *Custom*. The plans are approximations: see *Known limitations* in the README.
+- **One price chart** (`examples/dashboards/prices.yaml`) replaces the *today* and *upcoming* examples: the last hours and everything ahead, with spot, buy and sell price and a marker for now.
+- **Download diagnostics** (Settings → Devices & services → OPCOM PZU → three dots) for bug reports.
+- Issue templates on GitHub for bugs, supplier plans and ideas. This is a beta: reports are welcome.
+
+### Changed
+- The device now shows *Radu Simonica* as the manufacturer instead of OPCOM. The data is still OPCOM's, credited in the README.
 
 ## [0.3.1] - 2026-11-10
 

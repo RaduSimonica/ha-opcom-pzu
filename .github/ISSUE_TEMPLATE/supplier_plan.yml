@@ -1,0 +1,35 @@
+name: Supplier plan
+description: A plan is wrong, or you would like one added
+labels: [supplier-plan]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Plans are a single formula each, so adding or correcting one is quick. Please give your source: the offer document or a recent bill.
+  - type: input
+    id: supplier
+    attributes:
+      label: Supplier and plan name
+    validations:
+      required: true
+  - type: textarea
+    id: buy
+    attributes:
+      label: Buy price, per kWh
+      description: What you pay for a kWh, as a formula of the PZU price `pzu` (RON/kWh), with the regulated tariffs of your distribution zone and VAT.
+    validations:
+      required: true
+  - type: textarea
+    id: sell
+    attributes:
+      label: Sell price, per kWh
+      description: What you receive for a kWh sent to the grid. Say whether it follows each 15 minutes or a monthly average.
+  - type: input
+    id: zone
+    attributes:
+      label: Distribution operator (zone)
+      description: e.g. Retele Electrice Romania, DEER, Distribuție Oltenia, Delgaz Grid
+  - type: input
+    id: source
+    attributes:
+      label: Link to the offer, or a bill (with personal data removed)

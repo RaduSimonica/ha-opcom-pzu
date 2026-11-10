@@ -150,3 +150,36 @@ def test_stats_are_time_weighted():
     assert (s.minimum, s.maximum) == (1.0, 3.0) and s.max_start == pts[1].start
     assert stats([]) is None
     assert stats(pts, [10.0, -5.0]).minimum == -5.0  # custom prices (buy/sell) override spot
+
+
+# -- supplier plans ---------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "plan, spot, buy, sell",
+    [
+        ("eon_dinamic_pro", 0.5, (0.5 + 0.10 + 0.464) * 1.21, 0.5),
+        ("eon_dinamic_pro", -0.2, (-0.2 + 0.10 + 0.464) * 1.21, -0.2),
+        ("ppc_maxcontrol", 0.5, (0.5 + 0.097 + 0.00363 + 0.464) * 1.21, 0.5),
+        ("ppc_maxcontrol", 2.0, (0.999 + 0.097 + 0.00363 + 0.464) * 1.21, 2.0),  # buy capped
+        ("ppc_maxcontrol", -0.2, (0 + 0.097 + 0.00363 + 0.464) * 1.21, 0.0),  # no negative sell
+        ("yellowgrid", 0.4, (0.75 * 0.4 + 0.1375 + 0.464) * 1.21, 0.5),  # sell floor 0.5
+        ("yellowgrid", 2.0, (0.55 + 0.464) * 1.21, 0.125 + 0.75 * 2.0),  # buy capped
+        ("yellowgrid", -0.2, (0.75 * -0.2 + 0.1375 + 0.464) * 1.21, 0.5),
+    ],
+)
+def test_supplier_plan_prices(plan, spot, buy, sell):
+    from custom_components.opcom_pzu.plans import PLANS
+
+    tariff = Tariff(buy_formula=PLANS[plan].buy, sell_formula=PLANS[plan].sell).compile()
+    assert tariff.buy_price(spot) == pytest.approx(buy)
+    assert tariff.sell_price(spot) == pytest.approx(sell)
+
+
+def test_every_plan_compiles_for_every_hour():
+    from custom_components.opcom_pzu.plans import PLANS
+
+    for plan in PLANS.values():
+        tariff = Tariff(buy_formula=plan.buy, sell_formula=plan.sell).compile()
+        for hour in range(24):
+            tariff.buy_price(0.5, hour), tariff.sell_price(0.5, hour)
