@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Battery Planner (battery planning)
+    url: https://github.com/RaduSimonica/battery-planner/issues
+    about: Questions about charging and discharging a battery belong in the Battery Planner repository.

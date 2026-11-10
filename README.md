@@ -8,6 +8,8 @@ Romanian day-ahead (PZU) electricity prices in Home Assistant: free, no account,
 - **Tomorrow's prices** as soon as OPCOM publishes them (about 13:45 Romanian time), with a full series for charts.
 - Correct **CET market time** and **DST days** (92 / 100 intervals), 15-minute resolution (older days are hourly).
 
+> **Beta.** This integration works, but it is young and the supplier plans are approximations. Please report what you find in the [issues](https://github.com/RaduSimonica/ha-opcom-pzu/issues) and attach the diagnostics file (*Settings → Devices & services → OPCOM PZU → three dots → Download diagnostics*).
+
 ## Install
 
 HACS → Custom repositories → add this repository as *Integration* → install → restart. HACS shows the released version (see the [changelog](CHANGELOG.md)). Then *Settings → Devices & services → Add integration → OPCOM PZU*.
@@ -39,7 +41,36 @@ Choosing a plan fills the formula for you, and you can still edit it (it then be
 | PPC MaxControl | `(max(min(pzu, 0.999), 0) + 0.097 + 0.00363 + 0.464) * 1.21` | `max(pzu, 0)` |
 | Yellowgrid | `(min(0.75*pzu + 0.1375, 0.55) + 0.464) * 1.21` | `max(0.125 + 0.75*pzu, 0.5)` |
 
-Your plan missing? Open an issue with its formula: adding one is a single line.
+Your plan missing or wrong? [Open an issue](https://github.com/RaduSimonica/ha-opcom-pzu/issues/new/choose) with its formula: adding one is a single line.
+
+**Known limitations of the plans**
+
+- **Regulated tariffs depend on your distribution operator.** The plans use the value for **Retele Electrice Romania**. If you are in another zone, edit the formula (see below).
+- **PPC MaxControl.** The buy price follows PPC's offer: a fixed 0.097, plus the PZU price of each 15 minutes limited to 0 to 0.999, plus 0.00363. The offer does **not** state the price for energy you send to the grid (it refers to the rules for prosumers), so the sell price here (`max(pzu, 0)`) is an assumption: check your contract. It needs a smart meter that measures every 15 minutes; with an hourly meter your consumption is spread evenly over the hour.
+- **Yellowgrid.** The buy formula is unconfirmed and may be wrong; the sell formula follows their advertised minimum of 0.50 with a share of the gain above it.
+- **E.ON Dinamic Pro** assumes a supply component of 0.10, which is contract-specific.
+- Suppliers change their rates, so treat the plans as a starting point and check them against your bill.
+
+### Distribution zones: the regulated part of the price
+
+Every plan adds the regulated tariffs, `0.464` in the formulas, before VAT. It depends on who operates the grid where you live (it is on your bill). These are PPC's figures from November 2026 and they can change at any time: transport 0.03645, system services 0.01272, green certificates 0.0740192, CfD 0.000144, cogeneration 0.0157 and excise 0.00768 are the same everywhere (together 0.14671), and the distribution tariff for low voltage differs:
+
+| Distribution operator | Counties | Distribution | Regulated total to use |
+|---|---|---|---|
+| Retele Electrice Romania | București, Ilfov, Giurgiu, Călărași, Constanța, Ialomița, Tulcea, Arad, Caraș-Severin, Hunedoara, Timiș | 0.31739 | **0.464** |
+| Distribuție Oltenia | Argeș, Dolj, Gorj, Mehedinți, Olt, Teleorman, Vâlcea | 0.33325 | **0.480** |
+| Distribuție Energie Electrică Romania | Brașov, Alba, Sibiu, Mureș, Harghita, Covasna, Cluj, Maramureș, Satu Mare, Sălaj, Bihor, Bistrița-Năsăud, Prahova, Buzău, Dâmbovița, Brăila, Galați, Vrancea | 0.35534 | **0.502** |
+| Delgaz Grid | Botoșani, Suceava, Neamț, Iași, Bacău, Vaslui | 0.38791 | **0.535** |
+
+To change it, pick the plan and edit the formula, replacing `0.464` with your value. Examples for a house in Brașov (Distribuție Energie Electrică Romania, 0.502):
+
+| Plan | Buy price formula for Brașov |
+|---|---|
+| E.ON Dinamic Pro | `(pzu + 0.10 + 0.502) * 1.21` |
+| PPC MaxControl | `(max(min(pzu, 0.999), 0) + 0.097 + 0.00363 + 0.502) * 1.21` |
+| Yellowgrid | `(min(0.75*pzu + 0.1375, 0.55) + 0.502) * 1.21` |
+
+The sell formulas have no regulated part, so they stay as they are. If you are not sure of your operator, it is printed on your electricity bill.
 
 ### Formulas
 

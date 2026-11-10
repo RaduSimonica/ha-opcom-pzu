@@ -7,16 +7,13 @@ version. See [CONTRIBUTING.md](CONTRIBUTING.md). Versions follow
 [semantic versioning](https://semver.org): `0.x.0` for new features, `0.x.y`
 for fixes.
 
-## [0.4.0-snapshot.2] - 2026-11-10
-
-### Fixed
-- Brings in the 0.3.1 hotfix: tomorrow's prices were not fetched after Home Assistant ran past midnight (details in `[0.3.1]` below).
-
-## [0.4.0-snapshot.1] - 2026-11-09
+## [0.4.0] - 2026-11-10
 
 ### Added
-- **Supplier plans.** The buy and sell pages have a *Supplier plan* selector (E.ON Dinamic Pro, PPC MaxControl, Yellowgrid) that fills the formula. You can edit the formula afterwards, and it becomes *Custom*.
+- **Supplier plans.** The buy and sell pages have a *Supplier plan* selector (E.ON Dinamic Pro, PPC MaxControl, Yellowgrid) that fills the formula. You can edit the formula afterwards, and it becomes *Custom*. The plans are approximations: see *Known limitations* in the README.
 - **One price chart** (`examples/dashboards/prices.yaml`) replaces the *today* and *upcoming* examples: the last hours and everything ahead, with spot, buy and sell price and a marker for now.
+- **Download diagnostics** (Settings → Devices & services → OPCOM PZU → three dots) for bug reports.
+- Issue templates on GitHub for bugs, supplier plans and ideas. This is a beta: reports are welcome.
 
 ### Changed
 - The device now shows *Radu Simonica* as the manufacturer instead of OPCOM. The data is still OPCOM's, credited in the README.
