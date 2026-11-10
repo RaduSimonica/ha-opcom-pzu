@@ -40,6 +40,20 @@ release, which HACS shows as the version and offers to everybody. Afterwards,
 merge `main` back into `staging` and `development` so they carry the new version
 and changelog.
 
+### Hotfixes (a fix that cannot wait for the next release)
+
+A bug in the stable release is fixed on its own branch from `main`, so the fix
+does not carry what is still being tried in `staging`.
+
+1. `git switch -c hotfix/0.3.1 main`, fix it with a test, set `version` to the
+   next stable patch (`0.3.1`) and add its `## [0.3.1] - date` section.
+2. Open a pull request into `main`. Merging publishes the stable release.
+3. **Keep the fix in the snapshots.** Make the same change on `development` too
+   (an identical change merges without a conflict) and note it in the next
+   snapshot's changelog section. After the release, merge `main` back into
+   `staging` and `development`, as after any stable release. If the changelog or
+   manifest conflict, keep the snapshot version and keep both changelog sections.
+
 ## Tests
 
 ```
